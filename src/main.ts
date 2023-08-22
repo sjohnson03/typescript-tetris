@@ -270,7 +270,8 @@ export function main() {
   const down$ = fromKey("KeyS");
 
   /** Observables */
-  
+  const action$ = merge(left$, right$, down$
+  )
 
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
@@ -280,27 +281,61 @@ export function main() {
   * @param block BlockSize to draw
   * @returns SVG element representing the block
   */
-  const addBlockToCanvas = (block: Block) => {
-    const x = block.x;
-    const y = block.y;
-
-    Canvas[y][x] = block;
+  const addBlockToCanvas = (canvas: Block[][], block: Block): Block[][] => {
+    const updatedCanvas = canvas.map((row, rowIndex) =>
+      row.map((currentBlock, colIndex) =>
+        rowIndex === block.y && colIndex === block.x
+          ? block // Add the new block at the specified position
+          : currentBlock
+      )
+    );
+    return updatedCanvas;
   };
 
-  const transformCanvasToSVG = (canvas: Block[][]) => {
-    const SVGElements: SVGElement[][] = canvas.map((row, index) => {
-      return row.map((block, colIndex) => {
-        const cube = createSvgElement(svg.namespaceURI, "rect", {
-          height: `${BlockSize.HEIGHT}`,
-          width: `${BlockSize.WIDTH}`,
-          x: `${BlockSize.WIDTH * (block.x - 1)}`,
-          y: `${BlockSize.HEIGHT * (block.y - 1)}`,
-          style: "fill: " + block.colour,
-        });
-        return cube; // Return the created SVG element
+  /**
+   * Transforms the canvas into a 2D array of SVG elements.
+   * @param canvas Canvas to transform
+   * @returns 2D array of SVG elements
+   * 
+  */
+  const transformCanvasToSVG = (canvas: Block[][]): SVGElement[][] => {
+    // Create a 2D array of SVG elements
+    const SVGElements: SVGElement[][] = canvas.map((row, index) => {// for each row in the input canvas
+      return row.map((block, colIndex) => { // for each block in the row
+        if (block) { // check if there is a block
+          const cube = createSvgElement(svg.namespaceURI, "rect", { // create an element for the block
+            height: `${BlockSize.HEIGHT}`,
+            width: `${BlockSize.WIDTH}`,
+            x: `${BlockSize.WIDTH * (block.x - 1)}`,
+            y: `${BlockSize.HEIGHT * (block.y - 1)}`,
+            style: "fill: " + block.colour,
+          });
+          return cube; // Return the created SVG element
+        } else { // Create an empty SVG element for spaces in our canvas with no blocks, this makes TS happy
+          const emptyCube = createSvgElement(svg.namespaceURI, "rect", {
+            height: '0',
+            width: '0',
+            x: '0',
+            y: '0',
+            style: "fill: black",
+          });
+          return emptyCube; // Return empty SVG element
+        }
       });
     });
-    return SVGElements;
+    return SVGElements; // return matrix of SVG elements
+  };
+
+  /**
+   * Updates the SVG canvas with a new canvas - impure function
+   * @param canvas Canvas to update the SVG canvas with
+  */
+  const updateDisplayedCanvas = (canvas: Block[][]) => {
+    transformCanvasToSVG(canvas).map((row) => {
+      row.map((block) => {
+        if (block){svg.appendChild(block)}
+      });
+    });
   };
   
 
@@ -314,17 +349,11 @@ export function main() {
    * 
    */
 
-  addBlockToCanvas(createBlock(1, 4, "aqua"))
   const render = (s: State) => {
-    // Add blocks to the main grid canvas
-   transformCanvasToSVG(Canvas).map((row) => {
-      row.map((block) => {
-        svg.appendChild(block);
-      });
-    });
-
-
-
+  // Add blocks to the main grid canvas
+    const temp = addBlockToCanvas(Canvas, createBlock(1, 2, "aqua"));
+    const temp2 = addBlockToCanvas(temp, createBlock(5, 2, "aqua"));
+    updateDisplayedCanvas(temp2);
 
 
     const cube = createSvgElement(svg.namespaceURI, "rect", {
@@ -364,7 +393,10 @@ export function main() {
   };
 
   const source$ = merge(tick$)
-    .pipe(scan((s: State) => ({ gameEnd: true }), initialState
+    .pipe(scan((s: State) => ({ gameEnd: false }), initialState
+    // check for tetris
+
+    // update position of blocks currently in movement
     )
     )
     .subscribe((s: State) => {
