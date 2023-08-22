@@ -32,52 +32,61 @@ const Constants = {
   GRID_HEIGHT: 20,
 } as const;
 
-const Block = {
+const BlockSize = {
   WIDTH: Viewport.CANVAS_WIDTH / Constants.GRID_WIDTH,
   HEIGHT: Viewport.CANVAS_HEIGHT / Constants.GRID_HEIGHT,
 };
 
-const Canvas = new Array(Constants.GRID_HEIGHT).fill(new Array(Constants.GRID_WIDTH).fill(0));
+const Canvas: Block[][] = new Array(Constants.GRID_HEIGHT).fill(new Array(Constants.GRID_WIDTH).fill(0));
 
-type Colour = "lightBlue" | "red" | "darkBlue" | "green" | "yellow" | "purple" | "orange";
+type Colour = "aqua" | "red" | "blue" | "green" | "yellow" | "purple" | "orange";
 
-type Block = typeof Block; // little blocks that make up big blocks
+type Block = {
+  x: number;
+  y: number;
+  colour: Colour;
+}
+/** Creates a single block at specified coordinates of specified colour
+  * @param x x-coordinate of block relative to each other
+  * @param y y-coordinate of block relative to each other
+  * @param colour colour of block
+  * @returns Block object
+*/
+const createBlock = (x: number, y: number, colour: Colour) : Block => ({
+  x,
+  y,
+  colour
+});
 
 // Types of blocks
 
-const squareBlock = {
+const squareBlock = 
   // [][]
   // [][]
-  blocks: [
-    { x: 0, y: 0 },
-    { x: 1, y: 0 },
-    { X: 0, y: 1 },
-    { x: 1, y: 1 },
-  ],
-  colour: "lightBlue" as Colour
-};
+  [
+    { x: 0, y: 0, colour: "aqua" as Colour} as Block,
+    { x: 1, y: 0, colour: "aqua" as Colour } as Block,
+    { x: 0, y: 1, colour: "aqua" as Colour } as Block,
+    { x: 1, y: 1, colour: "aqua" as Colour } as Block,
+  ]
 
-const longBlock = { 
+
+const longBlock = 
   // [][][][]
-  blocks: [ 
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 2, y: 1 },
-    { x: 3, y: 1 },
-  ],
-  colour: "red" as Colour
-};
+  [ 
+    { x: 0, y: 1, colour: "red" as Colour} as Block,
+    { x: 1, y: 1, colour: "red" as Colour} as Block,
+    { x: 2, y: 1, colour: "red" as Colour} as Block,
+    { x: 3, y: 1, colour: "red" as Colour} as Block,
+  ]  
 
 const rightAngleBlock = { 
   // [][][]
   //     []
   blocks: [
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 2, y: 1 },
-    { x: 2, y: 0 },
+    [0,1], [1,1], [2,1], [2,0]
   ],
-  colour: "darkBlue" as Colour
+  colour: "blue" as Colour
 };
 
 const leftAngleBlock = {
@@ -85,10 +94,7 @@ const leftAngleBlock = {
   //  [][][]
   //  []
   blocks: [
-    { x: 0, y: 0 },
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 2, y: 1 },
+    [0,0], [0,1], [1,1], [2,1]
   ],
   colour: "green" as Colour
 }
@@ -98,10 +104,7 @@ const tBlock = {
   //  [][][]
   //    []
   blocks: [
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 2, y: 1 },
-    { x: 1, y: 0 },
+    [0,1], [1,1], [2,1], [1,0]
   ],
   colour: "yellow" as Colour
 }
@@ -111,10 +114,7 @@ const zBlock = {
   // [][]
   //   [][]
   blocks: [
-    { x: 0, y: 1 },
-    { x: 1, y: 1 },
-    { x: 1, y: 0 },
-    { x: 2, y: 0 },
+    [0,1], [1,1], [1,0], [2,0]
   ],
   colour: "purple" as Colour
 }
@@ -124,10 +124,7 @@ const sBlock = {
   //   [][]
   // [][]
   blocks: [
-    { x: 0, y: 0 },
-    { x: 1, y: 0 },
-    { X: 1, y: 1 },
-    { x: 2, y: 1 },
+    [0,0], [1,0], [1,1], [2,1]
   ],
   colour: "orange" as Colour
 }
@@ -173,7 +170,10 @@ type Key = "KeyS" | "KeyA" | "KeyD";
 
 type Event = "keydown" | "keyup" | "keypress";
 
+
 /** Utility functions */
+
+
 
 /** State processing */
 
@@ -232,6 +232,8 @@ const createSvgElement = (
   return elem;
 };
 
+
+
 /**
  * This is the function called on page load. Your main game loop
  * should be called here.
@@ -268,9 +270,40 @@ export function main() {
   const down$ = fromKey("KeyS");
 
   /** Observables */
+  
 
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
+
+  /**
+  Add a block to the canvas
+  * @param block BlockSize to draw
+  * @returns SVG element representing the block
+  */
+  const addBlockToCanvas = (block: Block) => {
+    const x = block.x;
+    const y = block.y;
+
+    Canvas[y][x] = block;
+  };
+
+  const transformCanvasToSVG = (canvas: Block[][]) => {
+    const SVGElements: SVGElement[][] = canvas.map((row, index) => {
+      return row.map((block, colIndex) => {
+        const cube = createSvgElement(svg.namespaceURI, "rect", {
+          height: `${BlockSize.HEIGHT}`,
+          width: `${BlockSize.WIDTH}`,
+          x: `${BlockSize.WIDTH * (block.x - 1)}`,
+          y: `${BlockSize.HEIGHT * (block.y - 1)}`,
+          style: "fill: " + block.colour,
+        });
+        return cube; // Return the created SVG element
+      });
+    });
+    return SVGElements;
+  };
+  
+
 
   /**
    * Renders the current state to the canvas.
@@ -278,49 +311,61 @@ export function main() {
    * In MVC terms, this updates the View using the Model.
    *
    * @param s Current state
+   * 
    */
+
+  addBlockToCanvas(createBlock(1, 4, "aqua"))
   const render = (s: State) => {
     // Add blocks to the main grid canvas
+   transformCanvasToSVG(Canvas).map((row) => {
+      row.map((block) => {
+        svg.appendChild(block);
+      });
+    });
+
+
+
+
+
     const cube = createSvgElement(svg.namespaceURI, "rect", {
-      height: `${Block.HEIGHT}`,
-      width: `${Block.WIDTH}`,
+      height: `${BlockSize.HEIGHT}`,
+      width: `${BlockSize.WIDTH}`,
       x: "0",
       y: "0",
       style: "fill: green",
     });
     svg.appendChild(cube);
     const cube2 = createSvgElement(svg.namespaceURI, "rect", {
-      height: `${Block.HEIGHT}`,
-      width: `${Block.WIDTH}`,
-      x: `${Block.WIDTH * (3 - 1)}`,
-      y: `${Block.HEIGHT * (20 - 1)}`,
+      height: `${BlockSize.HEIGHT}`,
+      width: `${BlockSize.WIDTH}`,
+      x: `${BlockSize.WIDTH * (3 - 1)}`,
+      y: `${BlockSize.HEIGHT * (20 - 1)}`,
       style: "fill: red",
     });
     svg.appendChild(cube2);
     const cube3 = createSvgElement(svg.namespaceURI, "rect", {
-      height: `${Block.HEIGHT}`,
-      width: `${Block.WIDTH}`,
-      x: `${Block.WIDTH * (4 - 1)}`,
-      y: `${Block.HEIGHT * (20 - 1)}`,
-      style: "fill: red",
+      height: `${BlockSize.HEIGHT}`,
+      width: `${BlockSize.WIDTH}`,
+      x: `${BlockSize.WIDTH * (4 - 1)}`,
+      y: `${BlockSize.HEIGHT * (20 - 1)}`,
+      style: "fill: blue",
     });
     svg.appendChild(cube3);
 
     // Add a block to the preview canvas
     const cubePreview = createSvgElement(preview.namespaceURI, "rect", {
-      height: `${Block.HEIGHT}`,
-      width: `${Block.WIDTH}`,
-      x: `${Block.WIDTH * 2}`,
-      y: `${Block.HEIGHT}`,
+      height: `${BlockSize.HEIGHT}`,
+      width: `${BlockSize.WIDTH}`,
+      x: `${BlockSize.WIDTH * 2}`,
+      y: `${BlockSize.HEIGHT}`,
       style: "fill: green",
     });
     preview.appendChild(cubePreview);
   };
 
   const source$ = merge(tick$)
-    .pipe(scan((s: State) => ({ gameEnd: true }), initialState)
-    
-
+    .pipe(scan((s: State) => ({ gameEnd: true }), initialState
+    )
     )
     .subscribe((s: State) => {
       render(s);
