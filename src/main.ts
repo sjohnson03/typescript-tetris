@@ -1,0 +1,341 @@
+/**
+ * Inside this file you will use the classes and functions from rx.js
+ * to add visuals to the svg element in index.html, animate them, and make them interactive.
+ *
+ * Study and complete the tasks in observable exercises first to get ideas.
+ *
+ * Course Notes showing Asteroids in FRP: https://tgdwyer.github.io/asteroids/
+ *
+ * You will be marked on your functional programming style
+ * as well as the functionality that you implement.
+ *
+ * Document your code!
+ */
+
+import "./style.css";
+
+import { Observable, fromEvent, interval, merge } from "rxjs";
+import { map, filter, scan, tap } from "rxjs/operators";
+
+/** Constants */
+
+const Viewport = {
+  CANVAS_WIDTH: 200,
+  CANVAS_HEIGHT: 400,
+  PREVIEW_WIDTH: 160,
+  PREVIEW_HEIGHT: 80,
+} as const;
+
+const Constants = {
+  TICK_RATE_MS: 500,
+  GRID_WIDTH: 10,
+  GRID_HEIGHT: 20,
+} as const;
+
+const Block = {
+  WIDTH: Viewport.CANVAS_WIDTH / Constants.GRID_WIDTH,
+  HEIGHT: Viewport.CANVAS_HEIGHT / Constants.GRID_HEIGHT,
+};
+
+const Canvas = new Array(Constants.GRID_HEIGHT).fill(new Array(Constants.GRID_WIDTH).fill(0));
+
+type Colour = "lightBlue" | "red" | "darkBlue" | "green" | "yellow" | "purple" | "orange";
+
+type Block = typeof Block; // little blocks that make up big blocks
+
+// Types of blocks
+
+const squareBlock = {
+  // [][]
+  // [][]
+  blocks: [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { X: 0, y: 1 },
+    { x: 1, y: 1 },
+  ],
+  colour: "lightBlue" as Colour
+};
+
+const longBlock = { 
+  // [][][][]
+  blocks: [ 
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 1 },
+    { x: 3, y: 1 },
+  ],
+  colour: "red" as Colour
+};
+
+const rightAngleBlock = { 
+  // [][][]
+  //     []
+  blocks: [
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 1 },
+    { x: 2, y: 0 },
+  ],
+  colour: "darkBlue" as Colour
+};
+
+const leftAngleBlock = {
+  //
+  //  [][][]
+  //  []
+  blocks: [
+    { x: 0, y: 0 },
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 1 },
+  ],
+  colour: "green" as Colour
+}
+
+const tBlock = {
+  //
+  //  [][][]
+  //    []
+  blocks: [
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 2, y: 1 },
+    { x: 1, y: 0 },
+  ],
+  colour: "yellow" as Colour
+}
+
+const zBlock = {
+  //
+  // [][]
+  //   [][]
+  blocks: [
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 1, y: 0 },
+    { x: 2, y: 0 },
+  ],
+  colour: "purple" as Colour
+}
+
+const sBlock = {
+  //
+  //   [][]
+  // [][]
+  blocks: [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { X: 1, y: 1 },
+    { x: 2, y: 1 },
+  ],
+  colour: "orange" as Colour
+}
+
+const allBlocks = [squareBlock, longBlock, rightAngleBlock, leftAngleBlock, tBlock, sBlock, zBlock];
+
+abstract class RNG {
+  private static m = 0x80000000; // 2**31
+  private static a = 1103515245;
+  private static c = 12345;
+
+  public static hash = (seed: number) => (RNG.a * seed + RNG.c) % RNG.m;
+  // scale has values to between 0 and length of allBlocks[]
+  public static scale = (hash: number) => Math.floor(hash / RNG.m * allBlocks.length);
+}
+
+function createRNGStreamFromSource<T>(source$: Observable<T>){
+  return function createRNGStream(
+    seed: number = 0,
+  ): Observable<Number>{
+    const randomNumberStream = source$.pipe(
+      scan((acc, _) => RNG.hash(acc), seed),
+      map(RNG.scale),
+    );
+    return randomNumberStream;
+  };
+}
+
+const randomStream = createRNGStreamFromSource(interval(1000));
+// we use this to create random blocks
+
+const randomBlockStream = randomStream(5).pipe(
+  // a stream of random blocks which can be spawned.
+  map((randomNumber) => {
+    allBlocks[+randomNumber];
+  })
+);
+
+
+/** User input */
+
+type Key = "KeyS" | "KeyA" | "KeyD";
+
+type Event = "keydown" | "keyup" | "keypress";
+
+/** Utility functions */
+
+/** State processing */
+
+type State = Readonly<{
+  gameEnd: boolean;
+}>;
+
+const initialState: State = {
+  gameEnd: false,
+} as const;
+
+/**
+ * Updates the state by proceeding with one time step.
+ *
+ * @param s Current state
+ * @returns Updated state
+ */
+const tick = (s: State) => s;
+
+/** Rendering (side effects) */
+
+/**
+ * Displays a SVG element on the canvas. Brings to foreground.
+ * @param elem SVG element to display
+ */
+const show = (elem: SVGGraphicsElement) => {
+  elem.setAttribute("visibility", "visible");
+  elem.parentNode!.appendChild(elem);
+};
+
+/**
+ * Hides a SVG element on the canvas.
+ * @param elem SVG element to hide
+ */
+const hide = (elem: SVGGraphicsElement) =>
+  elem.setAttribute("visibility", "hidden");
+
+/**
+ * Creates an SVG element with the given properties.
+ *
+ * See https://developer.mozilla.org/en-US/docs/Web/SVG/Element for valid
+ * element names and properties.
+ *
+ * @param namespace Namespace of the SVG element
+ * @param name SVGElement name
+ * @param props Properties to set on the SVG element
+ * @returns SVG element
+ */
+const createSvgElement = (
+  namespace: string | null,
+  name: string,
+  props: Record<string, string> = {}
+) => {
+  const elem = document.createElementNS(namespace, name) as SVGElement;
+  Object.entries(props).forEach(([k, v]) => elem.setAttribute(k, v));
+  return elem;
+};
+
+/**
+ * This is the function called on page load. Your main game loop
+ * should be called here.
+ */
+export function main() {
+  // Canvas elements
+  const svg = document.querySelector("#svgCanvas") as SVGGraphicsElement &
+    HTMLElement;
+  const preview = document.querySelector("#svgPreview") as SVGGraphicsElement &
+    HTMLElement;
+  const gameover = document.querySelector("#gameOver") as SVGGraphicsElement &
+    HTMLElement;
+  const container = document.querySelector("#main") as HTMLElement;
+
+  svg.setAttribute("height", `${Viewport.CANVAS_HEIGHT}`);
+  svg.setAttribute("width", `${Viewport.CANVAS_WIDTH}`);
+  preview.setAttribute("height", `${Viewport.PREVIEW_HEIGHT}`);
+  preview.setAttribute("width", `${Viewport.PREVIEW_WIDTH}`);
+
+  // Text fields
+  const levelText = document.querySelector("#levelText") as HTMLElement;
+  const scoreText = document.querySelector("#scoreText") as HTMLElement;
+  const highScoreText = document.querySelector("#highScoreText") as HTMLElement;
+
+  /** User input */
+
+  const key$ = fromEvent<KeyboardEvent>(document, "keypress");
+
+  const fromKey = (keyCode: Key) =>
+    key$.pipe(filter(({ code }) => code === keyCode));
+
+  const left$ = fromKey("KeyA");
+  const right$ = fromKey("KeyD");
+  const down$ = fromKey("KeyS");
+
+  /** Observables */
+
+  /** Determines the rate of time steps */
+  const tick$ = interval(Constants.TICK_RATE_MS);
+
+  /**
+   * Renders the current state to the canvas.
+   *
+   * In MVC terms, this updates the View using the Model.
+   *
+   * @param s Current state
+   */
+  const render = (s: State) => {
+    // Add blocks to the main grid canvas
+    const cube = createSvgElement(svg.namespaceURI, "rect", {
+      height: `${Block.HEIGHT}`,
+      width: `${Block.WIDTH}`,
+      x: "0",
+      y: "0",
+      style: "fill: green",
+    });
+    svg.appendChild(cube);
+    const cube2 = createSvgElement(svg.namespaceURI, "rect", {
+      height: `${Block.HEIGHT}`,
+      width: `${Block.WIDTH}`,
+      x: `${Block.WIDTH * (3 - 1)}`,
+      y: `${Block.HEIGHT * (20 - 1)}`,
+      style: "fill: red",
+    });
+    svg.appendChild(cube2);
+    const cube3 = createSvgElement(svg.namespaceURI, "rect", {
+      height: `${Block.HEIGHT}`,
+      width: `${Block.WIDTH}`,
+      x: `${Block.WIDTH * (4 - 1)}`,
+      y: `${Block.HEIGHT * (20 - 1)}`,
+      style: "fill: red",
+    });
+    svg.appendChild(cube3);
+
+    // Add a block to the preview canvas
+    const cubePreview = createSvgElement(preview.namespaceURI, "rect", {
+      height: `${Block.HEIGHT}`,
+      width: `${Block.WIDTH}`,
+      x: `${Block.WIDTH * 2}`,
+      y: `${Block.HEIGHT}`,
+      style: "fill: green",
+    });
+    preview.appendChild(cubePreview);
+  };
+
+  const source$ = merge(tick$)
+    .pipe(scan((s: State) => ({ gameEnd: true }), initialState)
+    
+
+    )
+    .subscribe((s: State) => {
+      render(s);
+
+      if (s.gameEnd) {
+        show(gameover);
+      } else {
+        hide(gameover);
+      }
+    });
+}
+
+// The following simply runs your main function on window load.  Make sure to leave it in place.
+if (typeof window !== "undefined") {
+  window.onload = () => {
+    main();
+  };
+}
