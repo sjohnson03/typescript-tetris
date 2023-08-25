@@ -15,7 +15,7 @@
 import "./style.css";
 
 import { Observable, fromEvent, interval, merge } from "rxjs";
-import { map, filter, scan, tap } from "rxjs/operators";
+import { map, filter, scan, tap, takeUntil } from "rxjs/operators";
 
 /** Constants */
 
@@ -175,13 +175,17 @@ type Event = "keydown" | "keyup" | "keypress";
 
 
 
+
+
 /** State processing */
 
 type State = Readonly<{
+  canvas: Block[][];
   gameEnd: boolean;
 }>;
 
 const initialState: State = {
+  canvas: Canvas,
   gameEnd: false,
 } as const;
 
@@ -273,15 +277,18 @@ export function main() {
   const action$ = merge(left$, right$, down$
   )
 
+
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
+  
+
 
   /**
   Add a block to the canvas
   * @param block BlockSize to draw
   * @returns SVG element representing the block
   */
-  const addBlockToCanvas = (canvas: Block[][], block: Block): Block[][] => {
+  const addBlockToCanvas = (canvas:Block[][]) => (block: Block): Block[][] => {
     const updatedCanvas = canvas.map((row, rowIndex) =>
       row.map((currentBlock, colIndex) =>
         rowIndex === block.y && colIndex === block.x
@@ -337,7 +344,39 @@ export function main() {
       });
     });
   };
-  
+
+// const applyGravity(state: any[]) => {
+//   const newState = state.map((row, rowIndex) => {
+//   })
+
+function applyGravity(state: State) {
+  const newState = {
+    canvas: state.canvas.map((row, rowIndex) => {
+      return row.map((block, colIndex) => {
+        if (block) {
+          if (
+            rowIndex === Constants.GRID_HEIGHT - 1 || // If at the bottom
+            state.canvas[rowIndex + 1][colIndex] // If there is a block below
+          ) {
+            return block; // Block can't move down
+          } else {
+            const newBlock = createBlock(block.x, block.y + 1, block.colour); // Move the block down
+            return newBlock;
+          }
+        } else {
+          return block;
+        }
+      });
+    })
+  };
+  console.log(newState.canvas)
+  return newState;
+}
+
+const gravityTest = {
+  canvas: addBlockToCanvas(Canvas)(createBlock(2, 0, "green")),
+  gameEnd: false
+}
 
 
   /**
@@ -351,9 +390,8 @@ export function main() {
 
   const render = (s: State) => {
   // Add blocks to the main grid canvas
-    const temp = addBlockToCanvas(Canvas, createBlock(1, 2, "aqua"));
-    const temp2 = addBlockToCanvas(temp, createBlock(5, 2, "aqua"));
-    updateDisplayedCanvas(temp2);
+    addBlockToCanvas(s.canvas)(createBlock(3, 1, "green"))
+    updateDisplayedCanvas(s.canvas);
 
 
     const cube = createSvgElement(svg.namespaceURI, "rect", {
@@ -378,7 +416,7 @@ export function main() {
       x: `${BlockSize.WIDTH * (4 - 1)}`,
       y: `${BlockSize.HEIGHT * (20 - 1)}`,
       style: "fill: blue",
-    });
+    })
     svg.appendChild(cube3);
 
     // Add a block to the preview canvas
@@ -392,13 +430,21 @@ export function main() {
     preview.appendChild(cubePreview);
   };
 
-  const source$ = merge(tick$)
-    .pipe(scan((s: State) => ({ gameEnd: false }), initialState
-    // check for tetris
+  const source$ = merge(tick$)  
+    .pipe(
+      scan((s: State) => ({ 
+      canvas: applyGravity(s).canvas,
+      gameEnd: false
+    }), gravityTest
+    ),
+    // map((s: State) => {
+    //   return {
+    //     canvas: applyGravity(s),
+    //     gameEnd: false
+    //   }
+    // })
+    )
 
-    // update position of blocks currently in movement
-    )
-    )
     .subscribe((s: State) => {
       render(s);
 
