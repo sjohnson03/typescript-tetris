@@ -37,7 +37,9 @@ const BlockSize = {
   HEIGHT: Viewport.CANVAS_HEIGHT / Constants.GRID_HEIGHT,
 };
 
-const Canvas: Block[][] = new Array(Constants.GRID_HEIGHT).fill(new Array(Constants.GRID_WIDTH).fill(0));
+type Canvas = (Block | undefined)[][];
+
+const Canvas: (Block | undefined)[][] = new Array(Constants.GRID_HEIGHT).fill(new Array(Constants.GRID_WIDTH).fill(undefined));
 
 type Colour = "aqua" | "red" | "blue" | "green" | "yellow" | "purple" | "orange";
 
@@ -176,7 +178,7 @@ type Event = "keydown" | "keyup" | "keypress";
 /** State processing */
 
 type State = Readonly<{
-  canvas: Block[][];
+  canvas: (Block | undefined)[][];
   gameEnd: boolean;
 }>;
 
@@ -270,8 +272,8 @@ export function main() {
   const down$ = fromKey("KeyS");
 
   /** Observables */
-  const action$ = merge(left$, right$, down$
-  )
+  const action$ = merge(left$, right$, down$)
+    .subscribe()
 
 
   /** Determines the rate of time steps */
@@ -284,16 +286,35 @@ export function main() {
   * @param block BlockSize to draw
   * @returns SVG element representing the block
   */
-  const addBlockToCanvas = (canvas:Block[][]) => (block: Block) => (x: number, y: number): Block[][] => {
+  const addBlockToCanvas = (canvas:Canvas) => (block: Block | undefined) => (x: number, y: number): Canvas => {
     const updatedCanvas = canvas.map((row, rowIndex) =>
       row.map((currentBlock, colIndex) =>
         rowIndex === y && colIndex === x
           ? block // Add the new block at the specified position
-          : currentBlock // otherwise keep the already exisi
+          : currentBlock // otherwise keep the already existing block
       )
     );
     return updatedCanvas;
   };
+
+  const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas => {
+    const updatedCanvas = canvas.map((row, rowIndex) =>
+      row.map((currentBlock, colIndex) =>
+        rowIndex === y && colIndex === x
+          ? undefined // remove the block at the specified position
+          : currentBlock // otherwise keep the block
+      )
+    );
+    return updatedCanvas;
+  };
+
+  const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, newY: number): Canvas => {
+    const tempCanvas = addBlockToCanvas(canvas)(canvas[y][x])(newX, newY);
+    const updatedCanvas = removeBlockFromCanvas(tempCanvas)(x, y);
+
+    return updatedCanvas;
+  };
+
 
   /**
    * Transforms the canvas into a 2D array of SVG elements.
@@ -301,7 +322,7 @@ export function main() {
    * @returns 2D array of SVG elements
    * 
   */
-  const transformCanvasToSVG = (canvas: Block[][]): SVGElement[][] => {
+  const transformCanvasToSVG = (canvas: Canvas): SVGElement[][] => {
     // Create a 2D array of SVG elements
     const SVGElements: SVGElement[][] = canvas.map((row, index) => {// for each row in the input canvas
       return row.map((block, colIndex) => { // for each block in the row
@@ -333,7 +354,7 @@ export function main() {
    * Updates the SVG canvas with a new canvas - impure function
    * @param canvas Canvas to update the SVG canvas with
   */
-  const updateDisplayedCanvas = (canvas: Block[][]) => {
+  const updateDisplayedCanvas = (canvas: Canvas) => {
     transformCanvasToSVG(canvas).map((row) => {
       row.map((block) => {
         if (block){svg.appendChild(block)}
@@ -341,35 +362,30 @@ export function main() {
     });
   };
 
-
-  function applyGravity(state: State) {
-    const canvas = state.canvas;
-
-    const newCanvas = state.canvas.forEach((row, rowIndex) => {
-      row.forEach((block, colIndex) => {
-        if (block) {
-          console.log(rowIndex, colIndex);
-          if (
-            rowIndex === Constants.GRID_HEIGHT - 1 || // If at the bottom
-            state.canvas[rowIndex + 1][colIndex] // If there is a block below
-          ) {
-            addBlockToCanvas(state.canvas)(block)(colIndex, rowIndex + 1); // Add the block to the new state
-          } else {
-            addBlockToCanvas(state.canvas)(block)(colIndex, rowIndex + 1);
-          }
-        } else {
-          addBlockToCanvas(state.canvas)(block)(colIndex, rowIndex + 1);
-        }
-      });
-    });
-
-    console.log(newCanvas);
+  // function applyGravity(state: State) {
+  //   const newState = {
+  //     canvas: state.canvas.map((row, rowIndex) => {
+  //       return row.map((block, colIndex) => {
+  //         if (block) {
+  //           if (
+  //             rowIndex === Constants.GRID_HEIGHT - 1 || // If at the bottom
+  //             state.canvas[rowIndex + 1][colIndex] // If there is a block below
+  //           ) {
+  //             return block; // Block can't move down
+  //           } else {
+  //             removeBlockFromCanvas(newState.canvas)(rowIndex, colIndex); // Remove the block from its current location
+  //             addBlockToCanvas(newState.canvas)(createBlock(block.colour))(rowIndex, colIndex); // Move the block down
+  //           }
+  //         } else {
+  //           return block;
+  //         }
+  //       });
+  //     })
+  //   };
+  //   console.log(newState.canvas)
+  //   return newState;
+  // }
   
-    return {
-      ...state,
-      canvas: newCanvas
-    };
-  }
   
   
 
@@ -432,7 +448,7 @@ const gravityTest = {
   const source$ = merge(tick$)  
     .pipe(
       scan((s: State) => ({ 
-      canvas: applyGravity(s).canvas,
+      canvas: moveBlock(s.canvas)(5, 0)(5, 1),
       gameEnd: false
     }), gravityTest
     ),
