@@ -42,8 +42,6 @@ const Canvas: Block[][] = new Array(Constants.GRID_HEIGHT).fill(new Array(Consta
 type Colour = "aqua" | "red" | "blue" | "green" | "yellow" | "purple" | "orange";
 
 type Block = {
-  x: number;
-  y: number;
   colour: Colour;
 }
 /** Creates a single block at specified coordinates of specified colour
@@ -52,9 +50,7 @@ type Block = {
   * @param colour colour of block
   * @returns Block object
 */
-const createBlock = (x: number, y: number, colour: Colour) : Block => ({
-  x,
-  y,
+const createBlock = (colour: Colour) : Block => ({
   colour
 });
 
@@ -288,12 +284,12 @@ export function main() {
   * @param block BlockSize to draw
   * @returns SVG element representing the block
   */
-  const addBlockToCanvas = (canvas:Block[][]) => (block: Block): Block[][] => {
+  const addBlockToCanvas = (canvas:Block[][]) => (block: Block) => (x: number, y: number): Block[][] => {
     const updatedCanvas = canvas.map((row, rowIndex) =>
       row.map((currentBlock, colIndex) =>
-        rowIndex === block.y && colIndex === block.x
+        rowIndex === y && colIndex === x
           ? block // Add the new block at the specified position
-          : currentBlock
+          : currentBlock // otherwise keep the already exisi
       )
     );
     return updatedCanvas;
@@ -313,8 +309,8 @@ export function main() {
           const cube = createSvgElement(svg.namespaceURI, "rect", { // create an element for the block
             height: `${BlockSize.HEIGHT}`,
             width: `${BlockSize.WIDTH}`,
-            x: `${BlockSize.WIDTH * (block.x - 1)}`,
-            y: `${BlockSize.HEIGHT * (block.y - 1)}`,
+            x: `${BlockSize.WIDTH * (colIndex)}`,
+            y: `${BlockSize.HEIGHT * (index)}`,
             style: "fill: " + block.colour,
           });
           return cube; // Return the created SVG element
@@ -345,36 +341,40 @@ export function main() {
     });
   };
 
-// const applyGravity(state: any[]) => {
-//   const newState = state.map((row, rowIndex) => {
-//   })
 
-function applyGravity(state: State) {
-  const newState = {
-    canvas: state.canvas.map((row, rowIndex) => {
-      return row.map((block, colIndex) => {
+  function applyGravity(state: State) {
+    const canvas = state.canvas;
+
+    const newCanvas = state.canvas.forEach((row, rowIndex) => {
+      row.forEach((block, colIndex) => {
         if (block) {
+          console.log(rowIndex, colIndex);
           if (
             rowIndex === Constants.GRID_HEIGHT - 1 || // If at the bottom
             state.canvas[rowIndex + 1][colIndex] // If there is a block below
           ) {
-            return block; // Block can't move down
+            addBlockToCanvas(state.canvas)(block)(colIndex, rowIndex + 1); // Add the block to the new state
           } else {
-            const newBlock = createBlock(block.x, block.y + 1, block.colour); // Move the block down
-            return newBlock;
+            addBlockToCanvas(state.canvas)(block)(colIndex, rowIndex + 1);
           }
         } else {
-          return block;
+          addBlockToCanvas(state.canvas)(block)(colIndex, rowIndex + 1);
         }
       });
-    })
-  };
-  console.log(newState.canvas)
-  return newState;
-}
+    });
+
+    console.log(newCanvas);
+  
+    return {
+      ...state,
+      canvas: newCanvas
+    };
+  }
+  
+  
 
 const gravityTest = {
-  canvas: addBlockToCanvas(Canvas)(createBlock(2, 0, "green")),
+  canvas: addBlockToCanvas(Canvas)(createBlock("aqua"))(5,0),
   gameEnd: false
 }
 
@@ -390,34 +390,33 @@ const gravityTest = {
 
   const render = (s: State) => {
   // Add blocks to the main grid canvas
-    addBlockToCanvas(s.canvas)(createBlock(3, 1, "green"))
     updateDisplayedCanvas(s.canvas);
 
 
-    const cube = createSvgElement(svg.namespaceURI, "rect", {
-      height: `${BlockSize.HEIGHT}`,
-      width: `${BlockSize.WIDTH}`,
-      x: "0",
-      y: "0",
-      style: "fill: green",
-    });
-    svg.appendChild(cube);
-    const cube2 = createSvgElement(svg.namespaceURI, "rect", {
-      height: `${BlockSize.HEIGHT}`,
-      width: `${BlockSize.WIDTH}`,
-      x: `${BlockSize.WIDTH * (3 - 1)}`,
-      y: `${BlockSize.HEIGHT * (20 - 1)}`,
-      style: "fill: red",
-    });
-    svg.appendChild(cube2);
-    const cube3 = createSvgElement(svg.namespaceURI, "rect", {
-      height: `${BlockSize.HEIGHT}`,
-      width: `${BlockSize.WIDTH}`,
-      x: `${BlockSize.WIDTH * (4 - 1)}`,
-      y: `${BlockSize.HEIGHT * (20 - 1)}`,
-      style: "fill: blue",
-    })
-    svg.appendChild(cube3);
+    // const cube = createSvgElement(svg.namespaceURI, "rect", {
+    //   height: `${BlockSize.HEIGHT}`,
+    //   width: `${BlockSize.WIDTH}`,
+    //   x: "0",
+    //   y: "0",
+    //   style: "fill: green",
+    // });
+    // svg.appendChild(cube);
+    // const cube2 = createSvgElement(svg.namespaceURI, "rect", {
+    //   height: `${BlockSize.HEIGHT}`,
+    //   width: `${BlockSize.WIDTH}`,
+    //   x: `${BlockSize.WIDTH * (3 - 1)}`,
+    //   y: `${BlockSize.HEIGHT * (20 - 1)}`,
+    //   style: "fill: red",
+    // });
+    // svg.appendChild(cube2);
+    // const cube3 = createSvgElement(svg.namespaceURI, "rect", {
+    //   height: `${BlockSize.HEIGHT}`,
+    //   width: `${BlockSize.WIDTH}`,
+    //   x: `${BlockSize.WIDTH * (4 - 1)}`,
+    //   y: `${BlockSize.HEIGHT * (20 - 1)}`,
+    //   style: "fill: blue",
+    // })
+    // svg.appendChild(cube3);
 
     // Add a block to the preview canvas
     const cubePreview = createSvgElement(preview.namespaceURI, "rect", {
@@ -437,12 +436,6 @@ const gravityTest = {
       gameEnd: false
     }), gravityTest
     ),
-    // map((s: State) => {
-    //   return {
-    //     canvas: applyGravity(s),
-    //     gameEnd: false
-    //   }
-    // })
     )
 
     .subscribe((s: State) => {
