@@ -45,6 +45,7 @@ type Colour = "aqua" | "red" | "blue" | "green" | "yellow" | "purple" | "orange"
 
 type Block = {
   colour: Colour;
+  isActive?: boolean; // status indicating if the block is currently controlled by the player
 }
 /** Creates a single block at specified coordinates of specified colour
   * @param x x-coordinate of block relative to each other
@@ -53,7 +54,8 @@ type Block = {
   * @returns Block object
 */
 const createBlock = (colour: Colour) : Block => ({
-  colour
+  colour,
+  isActive: true,
 });
 
 // Types of blocks
@@ -235,7 +237,6 @@ const createSvgElement = (
 };
 
 
-
 /**
  * This is the function called on page load. Your main game loop
  * should be called here.
@@ -273,7 +274,9 @@ export function main() {
 
   /** Observables */
   const action$ = merge(left$, right$, down$)
-    .subscribe()
+    .subscribe(
+    
+    )
 
 
   /** Determines the rate of time steps */
@@ -309,10 +312,14 @@ export function main() {
   };
 
   const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, newY: number): Canvas => {
+    if (!canvas[newY][newX]) { // If there is no block at the specified position
     const tempCanvas = addBlockToCanvas(canvas)(canvas[y][x])(newX, newY);
     const updatedCanvas = removeBlockFromCanvas(tempCanvas)(x, y);
-
     return updatedCanvas;
+    }
+    console.log("There is already a block at position (" + newX + ", "  + newY + ")");
+    return canvas; // otherwise just return the canvas unchanged
+    
   };
 
 
@@ -337,12 +344,13 @@ export function main() {
           return cube; // Return the created SVG element
         } else { // Create an empty SVG element for spaces in our canvas with no blocks, this makes TS happy
           const emptyCube = createSvgElement(svg.namespaceURI, "rect", {
-            height: '0',
-            width: '0',
-            x: '0',
-            y: '0',
+            height: `${BlockSize.HEIGHT}`,
+            width: `${BlockSize.WIDTH}`,
+            x: `${BlockSize.WIDTH * (colIndex)}`,
+            y: `${BlockSize.HEIGHT * (index)}`,
             style: "fill: black",
           });
+          emptyCube.setAttribute("visibility", "hidden"); // Hide the empty SVG element
           return emptyCube; // Return empty SVG element
         }
       });
@@ -355,44 +363,55 @@ export function main() {
    * @param canvas Canvas to update the SVG canvas with
   */
   const updateDisplayedCanvas = (canvas: Canvas) => {
-    transformCanvasToSVG(canvas).map((row) => {
-      row.map((block) => {
-        if (block){svg.appendChild(block)}
+    // Clear the SVG canvas by removing all child nodes
+    while (svg.firstChild) {
+      svg.removeChild(svg.firstChild);
+    }
+  
+    const svgElements = transformCanvasToSVG(canvas); // Transform the canvas to SVG elements
+  
+    svgElements.forEach((row) => {
+      row.forEach((block) => {
+        if (block) {
+          svg.appendChild(block); // Append each SVG element to the SVG canvas
+        }
       });
     });
   };
-
-  // function applyGravity(state: State) {
-  //   const newState = {
-  //     canvas: state.canvas.map((row, rowIndex) => {
-  //       return row.map((block, colIndex) => {
-  //         if (block) {
-  //           if (
-  //             rowIndex === Constants.GRID_HEIGHT - 1 || // If at the bottom
-  //             state.canvas[rowIndex + 1][colIndex] // If there is a block below
-  //           ) {
-  //             return block; // Block can't move down
-  //           } else {
-  //             removeBlockFromCanvas(newState.canvas)(rowIndex, colIndex); // Remove the block from its current location
-  //             addBlockToCanvas(newState.canvas)(createBlock(block.colour))(rowIndex, colIndex); // Move the block down
-  //           }
-  //         } else {
-  //           return block;
-  //         }
-  //       });
-  //     })
-  //   };
-  //   console.log(newState.canvas)
-  //   return newState;
-  // }
-  
   
   
 
-const gravityTest = {
-  canvas: addBlockToCanvas(Canvas)(createBlock("aqua"))(5,0),
-  gameEnd: false
-}
+
+
+  function applyGravity(state: State, row: number = Constants.GRID_HEIGHT - 1, col: number = 0): State {
+    if (row < 0) {
+      return state; // Base case: we have processed all rows
+    }
+  
+    if (col >= Constants.GRID_WIDTH) {
+      return applyGravity(state, row - 1, 0); // Move to the previous row
+    }
+  
+    if (state.canvas[row][col]) {
+      if (row === Constants.GRID_HEIGHT - 1) {
+        return state;
+      } else if (state.canvas[row + 1][col]) {
+        return applyGravity(state, row, col + 1); // Move to the next column
+      } else {
+        const updatedCanvas = moveBlock(state.canvas)(col, row)(col, row + 1);
+        return applyGravity({ canvas: updatedCanvas, gameEnd: false }, row - 1, col);
+      }
+    } else {
+      return applyGravity(state, row, col + 1); // Move to the next column
+    }
+  }
+  
+
+  const gravityTest = {
+    canvas: addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua"))(4, 5))(createBlock("red"))(5, 0),
+    gameEnd: false
+  };
+  
 
 
   /**
@@ -448,7 +467,8 @@ const gravityTest = {
   const source$ = merge(tick$)  
     .pipe(
       scan((s: State) => ({ 
-      canvas: moveBlock(s.canvas)(5, 0)(5, 1),
+      canvas: applyGravity(s).canvas,
+      // canvas: moveBlock(s.canvas)(5, 0)(5, 1),
       gameEnd: false
     }), gravityTest
     ),
