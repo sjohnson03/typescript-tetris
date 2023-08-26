@@ -53,9 +53,9 @@ type Block = {
   * @param colour colour of block
   * @returns Block object
 */
-const createBlock = (colour: Colour) : Block => ({
+const createBlock = (colour: Colour, status = true): Block => ({
   colour,
-  isActive: true,
+  isActive: status,
 });
 
 // Types of blocks
@@ -392,23 +392,32 @@ export function main() {
       return applyGravity(state, row - 1, 0); // Move to the previous row
     }
   
-    if (state.canvas[row][col]) {
-      if (row === Constants.GRID_HEIGHT - 1) {
-        return state;
-      } else if (state.canvas[row + 1][col]) {
-        return applyGravity(state, row, col + 1); // Move to the next column
+    const currBlock = state.canvas[row][col];
+  
+    if (currBlock !== undefined) {
+      if ("colour" in currBlock && currBlock.isActive) {
+        console.log(currBlock.isActive)
+        if (row === Constants.GRID_HEIGHT - 1) {
+          return state;
+        } else if (state.canvas[row + 1][col]) {
+          return applyGravity(state, row, col + 1); // Move to the next column
+        } else {
+          const updatedCanvas = moveBlock(state.canvas)(col, row)(col, row + 1);
+          return applyGravity({ canvas: updatedCanvas, gameEnd: false }, row - 1, col);
+        }
       } else {
-        const updatedCanvas = moveBlock(state.canvas)(col, row)(col, row + 1);
-        return applyGravity({ canvas: updatedCanvas, gameEnd: false }, row - 1, col);
+        return applyGravity(state, row, col + 1); // Move to the next column
       }
     } else {
       return applyGravity(state, row, col + 1); // Move to the next column
     }
   }
   
+  
+  
 
   const gravityTest = {
-    canvas: addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua"))(4, 5))(createBlock("red"))(5, 0),
+    canvas: addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 5))(createBlock("red", true))(5, 0),
     gameEnd: false
   };
   
