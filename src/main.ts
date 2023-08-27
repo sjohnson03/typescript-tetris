@@ -14,8 +14,8 @@
 
 import "./style.css";
 
-import { Observable, fromEvent, interval, merge } from "rxjs";
-import { map, filter, scan, tap, takeUntil } from "rxjs/operators";
+import { Observable, fromEvent, interval, merge, of } from "rxjs";
+import { map, filter, scan, tap, takeUntil, switchMap } from "rxjs/operators";
 
 /** Constants */
 
@@ -273,10 +273,11 @@ export function main() {
   const down$ = fromKey("KeyS");
 
   /** Observables */
-  const action$ = merge(left$, right$, down$)
-    .subscribe(
-    
-    )
+  const moveLeft$ = left$.pipe(map(() => ({ x: -1, y: 0 })));
+  const moveRight$ = right$.pipe(map(() => ({ x: 1, y: 0 })));
+  const moveDown$ = down$.pipe(map(() => ({ x: 0, y: 1 })));
+
+  const movement$ = merge(moveLeft$, moveRight$, moveDown$);
 
 
   /** Determines the rate of time steps */
@@ -378,9 +379,6 @@ export function main() {
       });
     });
   };
-  
-  
-
 
 
   function applyGravity(state: State, row: number = Constants.GRID_HEIGHT - 1, col: number = 0): State {
@@ -412,8 +410,30 @@ export function main() {
       return applyGravity(state, row, col + 1); // Move to the next column
     }
   }
+
+  const blockPosition$ = movement$.pipe(
+    scan(
+      (pos, mov) => ({
+        x: pos.x + mov.x,
+        y: pos.y + mov.y,
+      }), { x: 0, y: 0 } // Initial position
+    )
+  );
+
+  const canvasState$ = blockPosition$.pipe(
+    switchMap((position) => { // switchmap switches to a new observable
+      const updatedCanvas = moveBlock(initialState.canvas)(
+        position.x,
+        position.y
+      )(position.x, position.y + 1);
   
-  
+      return of(updatedCanvas);
+    })
+  );
+
+  canvasState$.subscribe((canvas) => {
+    render({ canvas, gameEnd: false })
+  });
   
 
   const gravityTest = {
@@ -493,6 +513,7 @@ export function main() {
       }
     });
 }
+
 
 // The following simply runs your main function on window load.  Make sure to leave it in place.
 if (typeof window !== "undefined") {
