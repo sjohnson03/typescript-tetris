@@ -279,6 +279,32 @@ export function main() {
 
   const movement$ = merge(moveLeft$, moveRight$, moveDown$);
 
+  movement$.subscribe(console.log);
+
+  const blockPosition$ = movement$.pipe(
+    scan(
+      (pos, mov) => ({
+        x: pos.x + mov.x,
+        y: pos.y + mov.y,
+      }), { x: 0, y: 0 } // Initial position
+    )
+  );
+
+  const canvasState$ = blockPosition$.pipe(
+    switchMap((position) => { // switchmap switches to a new observable
+      const updatedCanvas = moveBlock(initialState.canvas)(
+        position.x,
+        position.y
+      )(position.x, position.y + 1);
+  
+      return of(updatedCanvas);
+    })
+  );
+
+  canvasState$.subscribe((canvas) => {
+    render({ canvas, gameEnd: false })
+  });
+
 
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
@@ -396,6 +422,7 @@ export function main() {
       if ("colour" in currBlock && currBlock.isActive) {
         console.log(currBlock.isActive)
         if (row === Constants.GRID_HEIGHT - 1) {
+          currBlock.isActive = false;
           return state;
         } else if (state.canvas[row + 1][col]) {
           return applyGravity(state, row, col + 1); // Move to the next column
@@ -411,29 +438,6 @@ export function main() {
     }
   }
 
-  const blockPosition$ = movement$.pipe(
-    scan(
-      (pos, mov) => ({
-        x: pos.x + mov.x,
-        y: pos.y + mov.y,
-      }), { x: 0, y: 0 } // Initial position
-    )
-  );
-
-  const canvasState$ = blockPosition$.pipe(
-    switchMap((position) => { // switchmap switches to a new observable
-      const updatedCanvas = moveBlock(initialState.canvas)(
-        position.x,
-        position.y
-      )(position.x, position.y + 1);
-  
-      return of(updatedCanvas);
-    })
-  );
-
-  canvasState$.subscribe((canvas) => {
-    render({ canvas, gameEnd: false })
-  });
   
 
   const gravityTest = {
@@ -493,6 +497,7 @@ export function main() {
     preview.appendChild(cubePreview);
   };
 
+
   const source$ = merge(tick$)  
     .pipe(
       scan((s: State) => ({ 
@@ -512,6 +517,11 @@ export function main() {
         hide(gameover);
       }
     });
+    return {
+      movementSubscription: movement$.subscribe(),
+      canvasSubscription: canvasState$.subscribe(),
+    }
+
 }
 
 
@@ -519,5 +529,13 @@ export function main() {
 if (typeof window !== "undefined") {
   window.onload = () => {
     main();
+
+    const movementSubscription = main().movementSubscription;
+    const canvasSubscription = main().canvasSubscription;
+
+
+    movementSubscription.unsubscribe();
+    canvasSubscription.unsubscribe();
+
   };
 }
