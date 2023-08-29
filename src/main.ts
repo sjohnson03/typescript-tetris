@@ -47,11 +47,13 @@ type Block = {
   colour: Colour;
   isActive?: boolean; // status indicating if the block is currently controlled by the player
 }
-/** Creates a single block at specified coordinates of specified colour
-  * @param x x-coordinate of block relative to each other
-  * @param y y-coordinate of block relative to each other
-  * @param colour colour of block
-  * @returns Block object
+
+
+/**
+  * Creates a block with the specified colour and status
+  * @param colour Colour of the block
+  * @param status Status of the block
+  * @returns Block with the specified colour and status
 */
 const createBlock = (colour: Colour, status = true): Block => ({
   colour,
@@ -172,10 +174,101 @@ type Event = "keydown" | "keyup" | "keypress";
 
 
 /** Utility functions */
+/**
+ * Add block at specified location to our canvas matrix
+ * @param canvas Canvas to add block to
+ * @param block Block to add
+ * @param x x-coordinate of block to add
+ * @param y y-coordinate of block to add
+ * @returns New canvas with added block
+*/
+const addBlockToCanvas = (canvas: Canvas) => (block: Block | undefined) => (x: number, y: number): Canvas => {
+  const updatedCanvas = canvas.map((row, rowIndex) =>
+    row.map((currentBlock, colIndex) =>
+      rowIndex === y && colIndex === x
+        ? block // Add the new block at the specified position
+        : currentBlock // otherwise keep the already existing block
+    )
+  );
+  return updatedCanvas;
+};
 
 
+/**
+ * Removes a block from a specified position on the canvas
+ * @param canvas Canvas to remove block from
+ * @param x x-coordinate of block to remove
+ * @param y y-coordinate of block to remove
+ * @returns New canvas with block removed
+*/
+const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas => {
+  const updatedCanvas = canvas.map((row, rowIndex) =>
+    row.map((currentBlock, colIndex) =>
+      rowIndex === y && colIndex === x
+        ? undefined // remove the block at the specified position
+        : currentBlock // otherwise keep the block
+    )
+  );
+  return updatedCanvas;
+};
+
+/**
+ * Moves a block at a specified position on the canvas to a new position
+ * @param x x-coordinate of block to move
+ * @param y y-coordinate of block to move
+ * @param newX x-coordinate of new position
+ * @param newY y-coordinate of new position
+ * @returns New Canvas with specified block moved to its new position
+*/
+const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, newY: number): Canvas => {
+  if (!canvas[newY][newX] && newX <= Constants.GRID_WIDTH && newX >= 0) { // If there is no block at the specified position
+    const tempCanvas = addBlockToCanvas(canvas)(canvas[y][x])(newX, newY);
+    const updatedCanvas = removeBlockFromCanvas(tempCanvas)(x, y);
+    return updatedCanvas;
+  }
+  console.log("Cannot move block to position: (" + newX + ", " + newY + ")");
+  return canvas; // otherwise just return the canvas unchanged
+
+};
 
 
+  /**
+   * Applies gravity to the currently active (controlled by the player) blocks on the canvas.
+   * This is done recursively
+   * @param state Current state
+   * @param row Current row to process
+   * @param col Current column to process
+   * @returns Updated state
+  */
+  function applyGravity(state: State, row: number = Constants.GRID_HEIGHT - 1, col: number = 0): State {
+    if (row < 0) {
+      return state; // Base case: we have processed all rows
+    }
+  
+    if (col >= Constants.GRID_WIDTH) {
+      return applyGravity(state, row - 1, 0); // Move to the previous row
+    }
+  
+    const currBlock = state.canvas[row][col];
+  
+    if (currBlock !== undefined) {
+      if ("colour" in currBlock && currBlock.isActive) { // check to see if of type block and if block is active
+        if (row === Constants.GRID_HEIGHT - 1) {
+          currBlock.isActive = false;
+          return state;
+        } else if (state.canvas[row + 1][col]) {
+          return applyGravity(state, row, col + 1); // Move to the next column
+        } else {
+          const updatedCanvas = moveBlock(state.canvas)(col, row)(col, row + 1);
+          return applyGravity({ canvas: updatedCanvas, gameEnd: false }, row - 1, col);
+        }
+      } else {
+        return applyGravity(state, row, col + 1); // Move to the next column
+      }
+    } else {
+      return applyGravity(state, row, col + 1); // Move to the next column
+    }
+  }
 
 /** State processing */
 
@@ -278,6 +371,7 @@ export function main() {
   const moveDown$ = down$.pipe(map(() => ({ x: 0, y: 1 })));
 
   const movement$ = merge(moveLeft$, moveRight$, moveDown$);
+  movement$.subscribe(console.log);
 
   movement$.subscribe(console.log);
 
@@ -287,8 +381,9 @@ export function main() {
         x: pos.x + mov.x,
         y: pos.y + mov.y,
       }), { x: 0, y: 0 } // Initial position
-    )
-  );
+    ),
+    tap(console.log)
+  )
 
   const canvasState$ = blockPosition$.pipe(
     switchMap((position) => { // switchmap switches to a new observable
@@ -308,47 +403,6 @@ export function main() {
 
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
-  
-
-
-  /**
-  Add a block to the canvas
-  * @param block BlockSize to draw
-  * @returns SVG element representing the block
-  */
-  const addBlockToCanvas = (canvas:Canvas) => (block: Block | undefined) => (x: number, y: number): Canvas => {
-    const updatedCanvas = canvas.map((row, rowIndex) =>
-      row.map((currentBlock, colIndex) =>
-        rowIndex === y && colIndex === x
-          ? block // Add the new block at the specified position
-          : currentBlock // otherwise keep the already existing block
-      )
-    );
-    return updatedCanvas;
-  };
-
-  const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas => {
-    const updatedCanvas = canvas.map((row, rowIndex) =>
-      row.map((currentBlock, colIndex) =>
-        rowIndex === y && colIndex === x
-          ? undefined // remove the block at the specified position
-          : currentBlock // otherwise keep the block
-      )
-    );
-    return updatedCanvas;
-  };
-
-  const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, newY: number): Canvas => {
-    if (!canvas[newY][newX]) { // If there is no block at the specified position
-    const tempCanvas = addBlockToCanvas(canvas)(canvas[y][x])(newX, newY);
-    const updatedCanvas = removeBlockFromCanvas(tempCanvas)(x, y);
-    return updatedCanvas;
-    }
-    console.log("There is already a block at position (" + newX + ", "  + newY + ")");
-    return canvas; // otherwise just return the canvas unchanged
-    
-  };
-
 
   /**
    * Transforms the canvas into a 2D array of SVG elements.
@@ -407,41 +461,9 @@ export function main() {
   };
 
 
-  function applyGravity(state: State, row: number = Constants.GRID_HEIGHT - 1, col: number = 0): State {
-    if (row < 0) {
-      return state; // Base case: we have processed all rows
-    }
-  
-    if (col >= Constants.GRID_WIDTH) {
-      return applyGravity(state, row - 1, 0); // Move to the previous row
-    }
-  
-    const currBlock = state.canvas[row][col];
-  
-    if (currBlock !== undefined) {
-      if ("colour" in currBlock && currBlock.isActive) {
-        console.log(currBlock.isActive)
-        if (row === Constants.GRID_HEIGHT - 1) {
-          currBlock.isActive = false;
-          return state;
-        } else if (state.canvas[row + 1][col]) {
-          return applyGravity(state, row, col + 1); // Move to the next column
-        } else {
-          const updatedCanvas = moveBlock(state.canvas)(col, row)(col, row + 1);
-          return applyGravity({ canvas: updatedCanvas, gameEnd: false }, row - 1, col);
-        }
-      } else {
-        return applyGravity(state, row, col + 1); // Move to the next column
-      }
-    } else {
-      return applyGravity(state, row, col + 1); // Move to the next column
-    }
-  }
-
-  
 
   const gravityTest = {
-    canvas: addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 5))(createBlock("red", true))(5, 0),
+    canvas: addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0),
     gameEnd: false
   };
   
