@@ -174,6 +174,26 @@ type Event = "keydown" | "keyup" | "keypress";
 
 
 /** Utility functions */
+
+
+/**
+ * Updates the activeBlocks array stored in the state for the currently active blocks in our game
+ * @param state Current state
+ * @returns New activeBlocks array
+*/
+const updateActiveBlocks = (state: State) => {
+  const activeBlocks = state.canvas.reduce((acc, row, rowIndex) => {
+    return row.reduce((acc, block, colIndex) => {
+      if (block && block.isActive) {
+        acc.push({ x: colIndex, y: rowIndex });
+      }
+      return acc;
+    }, acc);
+  }, [] as { x: number; y: number }[]);
+  return activeBlocks;
+};
+
+
 /**
  * Add block at specified location to our canvas matrix
  * @param canvas Canvas to add block to
@@ -260,7 +280,10 @@ const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, n
           return applyGravity(state, row, col + 1); // Move to the next column
         } else {
           const updatedCanvas = moveBlock(state.canvas)(col, row)(col, row + 1);
-          return applyGravity({ canvas: updatedCanvas, gameEnd: false }, row - 1, col);
+          return applyGravity({
+            canvas: updatedCanvas, gameEnd: false,
+            activeBlockPositions: state.activeBlockPositions
+          }, row - 1, col);
         }
       } else {
         return applyGravity(state, row, col + 1); // Move to the next column
@@ -274,13 +297,15 @@ const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, n
 
 type State = Readonly<{
   canvas: (Block | undefined)[][];
+  activeBlockPositions: { x: number; y: number }[];
   gameEnd: boolean;
 }>;
 
 const initialState: State = {
   canvas: Canvas,
+  activeBlockPositions: [],
   gameEnd: false,
-} as const;
+};
 
 /**
  * Updates the state by proceeding with one time step.
@@ -371,9 +396,7 @@ export function main() {
   const moveDown$ = down$.pipe(map(() => ({ x: 0, y: 1 })));
 
   const movement$ = merge(moveLeft$, moveRight$, moveDown$);
-  movement$.subscribe(console.log);
 
-  movement$.subscribe(console.log);
 
   const blockPosition$ = movement$.pipe(
     scan(
@@ -382,7 +405,6 @@ export function main() {
         y: pos.y + mov.y,
       }), { x: 0, y: 0 } // Initial position
     ),
-    tap(console.log)
   )
 
   const canvasState$ = blockPosition$.pipe(
@@ -393,11 +415,16 @@ export function main() {
       )(position.x, position.y + 1);
   
       return of(updatedCanvas);
-    })
+
+    }),
+    // tap(console.log)
   );
 
   canvasState$.subscribe((canvas) => {
-    render({ canvas, gameEnd: false })
+    render({
+      canvas, gameEnd: false,
+      activeBlockPositions: []
+    })
   });
 
 
@@ -464,10 +491,10 @@ export function main() {
 
   const gravityTest = {
     canvas: addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0),
+    activeBlockPositions: [],
     gameEnd: false
   };
   
-
 
   /**
    * Renders the current state to the canvas.
@@ -520,15 +547,17 @@ export function main() {
   };
 
 
-  const source$ = merge(tick$)  
-    .pipe(
-      scan((s: State) => ({ 
-      canvas: applyGravity(s).canvas,
-      // canvas: moveBlock(s.canvas)(5, 0)(5, 1),
-      gameEnd: false
-    }), gravityTest
-    ),
+  const source$ = merge(tick$).pipe(
+    scan(
+      (state: State) => 
+      ({
+        canvas: applyGravity(state).canvas,
+        activeBlockPositions: updateActiveBlocks(state),
+        gameEnd: false
+      }),
+      gravityTest
     )
+  )
 
     .subscribe((s: State) => {
       render(s);
