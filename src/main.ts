@@ -177,6 +177,41 @@ type Event = "keydown" | "keyup" | "keypress";
 
 
 /**
+ * Moves all active blocks in the specified direction
+ * @param state Current state
+ * @param direction Movement direction (e.g., { x: -1, y: 0 } for left)
+ * @returns Updated state
+ */
+const moveActiveBlocks = (state: State, direction: { x: number; y: number }): State => {
+  const activeBlockPositions = updateActiveBlocks(state);
+
+  if (activeBlockPositions.length > 0) {
+    const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for eacha active block we move it in the specified direction
+      const newPosition = {
+        x: position.x + direction.x,
+        y: position.y + direction.y,
+      };
+      return moveBlock(canvas)(
+        position.x,
+        position.y
+      )(newPosition.x, newPosition.y);
+    }, state.canvas);
+
+    return {
+      canvas: updatedCanvas,
+      activeBlockPositions: updateActiveBlocks({
+        canvas: updatedCanvas,
+        activeBlockPositions: activeBlockPositions,
+        gameEnd: false,
+      }),
+      gameEnd: false,
+    };
+  }
+
+  return state;
+};
+
+/**
  * Updates the activeBlocks array stored in the state for the currently active blocks in our game
  * @param state Current state
  * @returns New activeBlocks array
@@ -241,7 +276,7 @@ const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas
  * @returns New Canvas with specified block moved to its new position
 */
 const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, newY: number): Canvas => {
-  if (!canvas[newY][newX] && newX <= Constants.GRID_WIDTH && newX >= 0) { // If there is no block at the specified position
+  if (!canvas[newY][newX] && newX < Constants.GRID_WIDTH && newX >= 0) { // If there is no block at the specified position
     const tempCanvas = addBlockToCanvas(canvas)(canvas[y][x])(newX, newY);
     const updatedCanvas = removeBlockFromCanvas(tempCanvas)(x, y);
     return updatedCanvas;
@@ -395,37 +430,9 @@ export function main() {
   const moveRight$ = right$.pipe(map(() => ({ x: 1, y: 0 })));
   const moveDown$ = down$.pipe(map(() => ({ x: 0, y: 1 })));
 
-  const movement$ = merge(moveLeft$, moveRight$, moveDown$);
-
-
-  const blockPosition$ = movement$.pipe(
-    scan(
-      (pos, mov) => ({
-        x: pos.x + mov.x,
-        y: pos.y + mov.y,
-      }), { x: 0, y: 0 } // Initial position
-    ),
-  )
-
-  const canvasState$ = blockPosition$.pipe(
-    switchMap((position) => { // switchmap switches to a new observable
-      const updatedCanvas = moveBlock(initialState.canvas)(
-        position.x,
-        position.y
-      )(position.x, position.y + 1);
-  
-      return of(updatedCanvas);
-
-    }),
-    // tap(console.log)
+  const movement$ = merge(moveLeft$, moveRight$, moveDown$).pipe(
+    map((movement) => ({ type: "movement", direction: movement }))
   );
-
-  canvasState$.subscribe((canvas) => {
-    render({
-      canvas, gameEnd: false,
-      activeBlockPositions: []
-    })
-  });
 
 
   /** Determines the rate of time steps */
@@ -510,31 +517,6 @@ export function main() {
     updateDisplayedCanvas(s.canvas);
 
 
-    // const cube = createSvgElement(svg.namespaceURI, "rect", {
-    //   height: `${BlockSize.HEIGHT}`,
-    //   width: `${BlockSize.WIDTH}`,
-    //   x: "0",
-    //   y: "0",
-    //   style: "fill: green",
-    // });
-    // svg.appendChild(cube);
-    // const cube2 = createSvgElement(svg.namespaceURI, "rect", {
-    //   height: `${BlockSize.HEIGHT}`,
-    //   width: `${BlockSize.WIDTH}`,
-    //   x: `${BlockSize.WIDTH * (3 - 1)}`,
-    //   y: `${BlockSize.HEIGHT * (20 - 1)}`,
-    //   style: "fill: red",
-    // });
-    // svg.appendChild(cube2);
-    // const cube3 = createSvgElement(svg.namespaceURI, "rect", {
-    //   height: `${BlockSize.HEIGHT}`,
-    //   width: `${BlockSize.WIDTH}`,
-    //   x: `${BlockSize.WIDTH * (4 - 1)}`,
-    //   y: `${BlockSize.HEIGHT * (20 - 1)}`,
-    //   style: "fill: blue",
-    // })
-    // svg.appendChild(cube3);
-
     // Add a block to the preview canvas
     const cubePreview = createSvgElement(preview.namespaceURI, "rect", {
       height: `${BlockSize.HEIGHT}`,
@@ -547,31 +529,34 @@ export function main() {
   };
 
 
-  const source$ = merge(tick$).pipe(
+  const source$ = merge(tick$, movement$)
+  .pipe(
     scan(
-      (state: State) => 
-      ({
-        canvas: applyGravity(state).canvas,
-        activeBlockPositions: updateActiveBlocks(state),
-        gameEnd: false
-      }),
+      (state: State, event: any) => {
+        if (event.type !== "movement") {
+          return {
+            canvas: applyGravity(state).canvas,
+            activeBlockPositions: updateActiveBlocks(state),
+            gameEnd: false,
+          };
+        } else if (event.type === "movement") {
+          return moveActiveBlocks(state, event.direction);
+        }
+        return state;
+      },
       gravityTest
     )
   )
 
-    .subscribe((s: State) => {
-      render(s);
+  .subscribe((s: State) => {
+    render(s);
 
-      if (s.gameEnd) {
-        show(gameover);
-      } else {
-        hide(gameover);
-      }
-    });
-    return {
-      movementSubscription: movement$.subscribe(),
-      canvasSubscription: canvasState$.subscribe(),
+    if (s.gameEnd) {
+      show(gameover);
+    } else {
+      hide(gameover);
     }
+  });
 
 }
 
@@ -581,12 +566,7 @@ if (typeof window !== "undefined") {
   window.onload = () => {
     main();
 
-    const movementSubscription = main().movementSubscription;
-    const canvasSubscription = main().canvasSubscription;
 
-
-    movementSubscription.unsubscribe();
-    canvasSubscription.unsubscribe();
 
   };
 }
