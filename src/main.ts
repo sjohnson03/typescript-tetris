@@ -177,6 +177,30 @@ type Event = "keydown" | "keyup" | "keypress";
 
 
 /**
+ * Makes all the blocks in the canvas inactive
+ * @param state State to make all blocks inactive in
+ * @returns New canvas with all blocks inactive
+*/
+
+const makeAllBlocksInactive = (state: State): State => {
+  const updatedCanvas = state.canvas.map((row) => {
+    return row.map((block) => {
+      if (block) {
+        block.isActive = false;
+      }
+      return block;
+    });
+  });
+  return {
+    canvas: updatedCanvas,
+    activeBlockPositions: [],
+    gameEnd: false,
+  };
+};
+
+
+
+/**
  * Moves all active blocks in the specified direction
  * @param state Current state
  * @param direction Movement direction (e.g., { x: -1, y: 0 } for left)
@@ -186,7 +210,7 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
   const activeBlockPositions = updateActiveBlocks(state);
 
   if (activeBlockPositions.length > 0) {
-    const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for eacha active block we move it in the specified direction
+    const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for each active block we move it in the specified direction
       const newPosition = {
         x: position.x + direction.x,
         y: position.y + direction.y,
@@ -216,7 +240,7 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
  * @param state Current state
  * @returns New activeBlocks array
 */
-const updateActiveBlocks = (state: State) => {
+const updateActiveBlocks = (state: State): { x: number; y: number }[]  => {
   const activeBlocks = state.canvas.reduce((acc, row, rowIndex) => {
     return row.reduce((acc, block, colIndex) => {
       if (block && block.isActive) {
@@ -259,7 +283,7 @@ const addBlockToCanvas = (canvas: Canvas) => (block: Block | undefined) => (x: n
 const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas => {
   const updatedCanvas = canvas.map((row, rowIndex) =>
     row.map((currentBlock, colIndex) =>
-      rowIndex === y && colIndex === x
+      rowIndex === y && colIndex === x // check if we are at the specified location
         ? undefined // remove the block at the specified position
         : currentBlock // otherwise keep the block
     )
@@ -276,20 +300,62 @@ const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas
  * @returns New Canvas with specified block moved to its new position
 */
 const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, newY: number): Canvas => {
-  if (!canvas[newY][newX] && newX < Constants.GRID_WIDTH && newX >= 0) { // If there is no block at the specified position
-    const tempCanvas = addBlockToCanvas(canvas)(canvas[y][x])(newX, newY);
-    const updatedCanvas = removeBlockFromCanvas(tempCanvas)(x, y);
-    return updatedCanvas;
-  }
-  console.log("Cannot move block to position: (" + newX + ", " + newY + ")");
-  return canvas; // otherwise just return the canvas unchanged
+  const block = canvas[y][x];
 
+  if (newX < 0 || newX >= Constants.GRID_WIDTH) { // If the new position is outside the canvas
+    return canvas; // return the canvas unchanged
+  }
+
+  if (!canvas[newY][newX]) { // If there is no block at the specified position
+    console.log("PENIS")
+    const tempCanvas = removeBlockFromCanvas(canvas)(x, y);
+    const updatedCanvas = addBlockToCanvas(tempCanvas)(block)(newX, newY);
+    return updatedCanvas;
+  } else if (block !== undefined && block.isActive) { // If there is an active block at the specified position
+    const dirX = newX - x;
+    const dirY = newY - y;
+
+    // Move the blocking block
+    const updatedCanvas = moveBlock(canvas)(newX, newY)(newX + dirX, newY + dirY);
+    console.log(updatedCanvas)
+
+
+    // Move the current block
+    const tempCanvas = removeBlockFromCanvas(updatedCanvas)(x, y);
+    const finalCanvas = addBlockToCanvas(tempCanvas)(block)(x + dirX, y + dirY);
+
+    // console.log(finalCanvas)
+
+    return finalCanvas;
+  }
+
+  return canvas;
 };
+
+
+
+/**
+ * Moves multiple blocks in the specified direction
+ * @param canvas Canvas to update
+ * @param blockPositions Array of block positions to move
+ * @param direction Movement direction
+ * @returns Updated canvas with blocks moved
+ */
+const moveMultipleBlocks = (canvas: Canvas) => (blockPositions: { x: number; y: number }[], direction: { x: number; y: number }): Canvas => {
+  return blockPositions.reduce((updatedCanvas, position) => {
+    const { x, y } = position;
+    const newX = x + direction.x;
+    const newY = y + direction.y;
+
+    return moveBlock(updatedCanvas)(x, y)(newX, newY);
+  }, canvas);
+};
+
 
 
   /**
    * Applies gravity to the currently active (controlled by the player) blocks on the canvas.
-   * This is done recursively
+   * This is done recursively starting from the bottom row and making our way up
    * @param state Current state
    * @param row Current row to process
    * @param col Current column to process
@@ -308,13 +374,14 @@ const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, n
   
     if (currBlock !== undefined) {
       if ("colour" in currBlock && currBlock.isActive) { // check to see if of type block and if block is active
-        if (row === Constants.GRID_HEIGHT - 1) {
-          currBlock.isActive = false;
-          return state;
-        } else if (state.canvas[row + 1][col]) {
+        if (row === Constants.GRID_HEIGHT - 1) { // check if block is at the bottom of the canvas
+          return makeAllBlocksInactive(state); // make all blocks inactive
+          
+        } else if (state.canvas[row + 1][col]) { // check if there is a block below the current block
           return applyGravity(state, row, col + 1); // Move to the next column
-        } else {
-          const updatedCanvas = moveBlock(state.canvas)(col, row)(col, row + 1);
+
+        } else { // move the block down by one row
+          const updatedCanvas = moveMultipleBlocks(state.canvas)(state.activeBlockPositions, { x: 0, y: 1 }); // move all active blocks down 1
           return applyGravity({
             canvas: updatedCanvas, gameEnd: false,
             activeBlockPositions: state.activeBlockPositions
@@ -497,11 +564,12 @@ export function main() {
 
 
   const gravityTest = {
-    canvas: addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0),
+    canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
     activeBlockPositions: [],
     gameEnd: false
   };
   
+
 
   /**
    * Renders the current state to the canvas.
