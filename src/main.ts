@@ -209,12 +209,61 @@ const makeAllBlocksInactive = (state: State): State => {
 const moveActiveBlocks = (state: State, direction: { x: number; y: number }): State => {
   const activeBlockPositions = updateActiveBlocks(state);
 
-  if (activeBlockPositions.length > 0) {
+
+  if (activeBlockPositions.length > 0 && direction.x < 0) {
     const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for each active block we move it in the specified direction
       const newPosition = {
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
+      console.log(newPosition)
+      return moveBlock(canvas)(
+        position.x,
+        position.y
+      )(newPosition.x, newPosition.y);
+    }, state.canvas);
+
+    return {
+      canvas: updatedCanvas,
+      activeBlockPositions: updateActiveBlocks({
+        canvas: updatedCanvas,
+        activeBlockPositions: activeBlockPositions,
+        gameEnd: false,
+      }),
+      gameEnd: false,
+    };
+  }
+  else if (activeBlockPositions.length > 0 && direction.x > 0) {
+    const updatedCanvas = activeBlockPositions.reduceRight((canvas, position) => { // for each active block we move it in the specified direction
+      const newPosition = {
+        x: position.x + direction.x,
+        y: position.y + direction.y,
+      };
+      console.log(newPosition)
+      return moveBlock(canvas)(
+        position.x,
+        position.y
+      )(newPosition.x, newPosition.y);
+    }, state.canvas);
+
+    return {
+      canvas: updatedCanvas,
+      activeBlockPositions: updateActiveBlocks({
+        canvas: updatedCanvas,
+        activeBlockPositions: activeBlockPositions,
+        gameEnd: false,
+      }),
+      gameEnd: false,
+    };
+  }
+
+  else if (activeBlockPositions.length > 0 && direction.y > 0) {
+    const updatedCanvas = activeBlockPositions.reduceRight((canvas, position) => { // for each active block we move it in the specified direction
+      const newPosition = {
+        x: position.x + direction.x,
+        y: position.y + direction.y,
+      };
+      console.log(newPosition)
       return moveBlock(canvas)(
         position.x,
         position.y
@@ -293,44 +342,47 @@ const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas
 
 /**
  * Moves a block at a specified position on the canvas to a new position
+ * considering potential interactions with other blocks.
+ * @param canvas Canvas to update
  * @param x x-coordinate of block to move
  * @param y y-coordinate of block to move
  * @param newX x-coordinate of new position
  * @param newY y-coordinate of new position
  * @returns New Canvas with specified block moved to its new position
-*/
-const moveBlock = (canvas: Canvas) => (x: number, y: number) => (newX: number, newY: number): Canvas => {
+ */
+const moveBlock = (canvas: Canvas,) => (  x: number,  y: number,) => (  newX: number,  newY: number,): Canvas => {
   const block = canvas[y][x];
 
-  if (newX < 0 || newX >= Constants.GRID_WIDTH) { // If the new position is outside the canvas
-    return canvas; // return the canvas unchanged
+  if (newX < 0 || newX >= Constants.GRID_WIDTH) {
+    return canvas; // If the new position is outside the canvas, return unchanged canvas
+    
   }
 
-  if (!canvas[newY][newX]) { // If there is no block at the specified position
-    console.log("PENIS")
+  if (newX >= 0 && newX < Constants.GRID_WIDTH && !canvas[newY][newX]) {
     const tempCanvas = removeBlockFromCanvas(canvas)(x, y);
     const updatedCanvas = addBlockToCanvas(tempCanvas)(block)(newX, newY);
+    // console.log(updatedCanvas)
     return updatedCanvas;
-  } else if (block !== undefined && block.isActive) { // If there is an active block at the specified position
-    const dirX = newX - x;
-    const dirY = newY - y;
+  } 
+  // else if (block !== undefined && block.isActive) {
+  //   console.log(canvas)
+  //   const dirX = newX - x;
+  //   const dirY = newY - y;
 
-    // Move the blocking block
-    const updatedCanvas = moveBlock(canvas)(newX, newY)(newX + dirX, newY + dirY);
-    console.log(updatedCanvas)
+  //   // const updatedCanvas = addBlockToCanvas(canvas)(block)(newX, newY);
 
+  //   const movedCanvas = moveBlock(canvas)(newX, newY)(newX + dirX, newY + dirY);
+  //   console.log(movedCanvas)
+  //   const tempCanvas = removeBlockFromCanvas(movedCanvas)(x, y);
+  //   const updatedCanvas = addBlockToCanvas(tempCanvas)(block)(newX, newY);
 
-    // Move the current block
-    const tempCanvas = removeBlockFromCanvas(updatedCanvas)(x, y);
-    const finalCanvas = addBlockToCanvas(tempCanvas)(block)(x + dirX, y + dirY);
-
-    // console.log(finalCanvas)
-
-    return finalCanvas;
-  }
+  //   return updatedCanvas;
+  // }
+  console.log(canvas)
 
   return canvas;
 };
+
 
 
 
