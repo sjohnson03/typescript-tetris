@@ -48,6 +48,10 @@ type Block = {
   isActive?: boolean; // status indicating if the block is currently controlled by the player
 }
 
+type Tetromino = {
+  blocks: [Block, number, number][]; // array of blocks and their positions
+}
+
 
 /**
   * Creates a block with the specified colour and status
@@ -60,17 +64,19 @@ const createBlock = (colour: Colour, status = true): Block => ({
   isActive: status,
 });
 
-// Types of blocks
+// Types of tetrominoes
 
-const squareBlock = 
+const squareBlock: Tetromino = 
   // [][]
   // [][]
-  [
-    { x: 0, y: 0, colour: "aqua" as Colour} as Block,
-    { x: 1, y: 0, colour: "aqua" as Colour } as Block,
-    { x: 0, y: 1, colour: "aqua" as Colour } as Block,
-    { x: 1, y: 1, colour: "aqua" as Colour } as Block,
+  {
+  blocks: [
+    [createBlock("aqua"), 0, 0],
+    [createBlock("aqua"), 1, 0],
+    [createBlock("aqua"), 0, 1],
+    [createBlock("aqua"), 1, 1]
   ]
+};
 
 
 const longBlock = 
@@ -209,7 +215,7 @@ const makeAllBlocksInactive = (state: State): State => {
 const moveActiveBlocks = (state: State, direction: { x: number; y: number }): State => {
   const activeBlockPositions = updateActiveBlocks(state);
 
-  if (activeBlockPositions.length > 0 && (direction.x < 0 || direction.y > 0)) { // if we are moving left
+  if (activeBlockPositions.length > 0 && (direction.x < 0)) { // if we are moving left
     const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for each active block we move it in the specified direction
       const newPosition = {
         x: position.x + direction.x,
@@ -231,9 +237,10 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
       gameEnd: false,
     };
   }
-  else if (activeBlockPositions.length > 0 && direction.x > 0) { // if we are moving right
+  else if (activeBlockPositions.length > 0 && (direction.x > 0 || direction.y > 0)) { // if we are moving right or moving down
     const updatedCanvas = activeBlockPositions.reduceRight((canvas, position) => { // for each active block we move it in the specified direction
-      // we use reduceRight to read the array from right to left which prevents 
+      // we use reduceRight to read the array from right to left so the rightmost block moves before the one to its left
+      // this gets the blocks out of the way of the block which is about to be moved.
       const newPosition = {
         x: position.x + direction.x,
         y: position.y + direction.y,
@@ -254,6 +261,7 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
       gameEnd: false,
     };
   }
+
 
   return state;
 };
@@ -313,6 +321,17 @@ const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas
   );
   return updatedCanvas;
 };
+
+const spawnTetromino = (canvas: Canvas) => (tetromino: Tetromino) => (x: number, y: number): Canvas => {
+  const updatedCanvas = tetromino.blocks.reduce((acc, block) => {
+    const [blockToAdd, blockX, blockY] = block;
+    return addBlockToCanvas(acc)(blockToAdd)(blockX + x, blockY + y);
+  }, canvas);
+  return updatedCanvas;
+};
+
+
+
 
 /**
  * Moves a block at a specified position on the canvas to a new position
@@ -587,7 +606,8 @@ export function main() {
 
 
   const gravityTest = {
-    canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
+    // canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
+    canvas: spawnTetromino(Canvas)(squareBlock)(0, 0),
     activeBlockPositions: [],
     gameEnd: false
   };
