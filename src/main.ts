@@ -201,16 +201,15 @@ const makeAllBlocksInactive = (state: State): State => {
 
 
 /**
- * Moves all active blocks in the specified direction
- * @param state Current state
+ * Moves all currently active blocks in specified direction
+ * @param state Current state of active blocks
  * @param direction Movement direction (e.g., { x: -1, y: 0 } for left)
  * @returns Updated state
  */
 const moveActiveBlocks = (state: State, direction: { x: number; y: number }): State => {
   const activeBlockPositions = updateActiveBlocks(state);
 
-
-  if (activeBlockPositions.length > 0 && direction.x < 0) {
+  if (activeBlockPositions.length > 0 && (direction.x < 0 || direction.y > 0)) { // if we are moving left
     const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for each active block we move it in the specified direction
       const newPosition = {
         x: position.x + direction.x,
@@ -232,31 +231,9 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
       gameEnd: false,
     };
   }
-  else if (activeBlockPositions.length > 0 && direction.x > 0) {
+  else if (activeBlockPositions.length > 0 && direction.x > 0) { // if we are moving right
     const updatedCanvas = activeBlockPositions.reduceRight((canvas, position) => { // for each active block we move it in the specified direction
-      const newPosition = {
-        x: position.x + direction.x,
-        y: position.y + direction.y,
-      };
-      return moveBlock(canvas)(
-        position.x,
-        position.y
-      )(newPosition.x, newPosition.y);
-    }, state.canvas);
-
-    return {
-      canvas: updatedCanvas,
-      activeBlockPositions: updateActiveBlocks({
-        canvas: updatedCanvas,
-        activeBlockPositions: activeBlockPositions,
-        gameEnd: false,
-      }),
-      gameEnd: false,
-    };
-  }
-
-  else if (activeBlockPositions.length > 0 && direction.y > 0) {
-    const updatedCanvas = activeBlockPositions.reduceRight((canvas, position) => { // for each active block we move it in the specified direction
+      // we use reduceRight to read the array from right to left which prevents 
       const newPosition = {
         x: position.x + direction.x,
         y: position.y + direction.y,
