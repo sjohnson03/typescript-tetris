@@ -79,32 +79,53 @@ const squareBlock: Tetromino =
 };
 
 
-const longBlock = 
+const longBlock: Tetromino = 
   // [][][][]
-  [ 
-    { x: 0, y: 1, colour: "red" as Colour} as Block,
-    { x: 1, y: 1, colour: "red" as Colour} as Block,
-    { x: 2, y: 1, colour: "red" as Colour} as Block,
-    { x: 3, y: 1, colour: "red" as Colour} as Block,
-  ]  
+  {
+    blocks: [
+      [createBlock("red"), 0, 0],
+      [createBlock("red"), 1, 0],
+      [createBlock("red"), 2, 0],
+      [createBlock("red"), 3, 0]
+    ]
+  };
+  // [ 
+  //   { x: 0, y: 1, colour: "red" as Colour} as Block,
+  //   { x: 1, y: 1, colour: "red" as Colour} as Block,
+  //   { x: 2, y: 1, colour: "red" as Colour} as Block,
+  //   { x: 3, y: 1, colour: "red" as Colour} as Block,
+  // ]  
 
-const rightAngleBlock = { 
+const rightAngleBlock: Tetromino = 
+{ 
+  blocks: [
+    [createBlock("blue"), 0, 0],
+    [createBlock("blue"), 1, 0],
+    [createBlock("red"), 2, 0],
+    [createBlock("blue"), 2, 1]
+  ]
   // [][][]
   //     []
-  blocks: [
-    [0,1], [1,1], [2,1], [2,0]
-  ],
-  colour: "blue" as Colour
+//   blocks: [
+//     [0,1], [1,1], [2,1], [2,0]
+//   ],
+//   colour: "blue" as Colour
 };
 
-const leftAngleBlock = {
+const leftAngleBlock: Tetromino = {
   //
   //  [][][]
   //  []
   blocks: [
-    [0,0], [0,1], [1,1], [2,1]
-  ],
-  colour: "green" as Colour
+    [createBlock("green"), 0, 0],
+    [createBlock("green"), 0, 1],
+    [createBlock("green"), 1, 0],
+    [createBlock("green"), 2, 0]
+  ]
+  // blocks: [
+  //   [0,0], [0,1], [1,1], [2,1]
+  // ],
+  // colour: "green" as Colour
 }
 
 const tBlock = {
@@ -183,6 +204,20 @@ type Event = "keydown" | "keyup" | "keypress";
 
 
 /**
+ * 
+ * @param canvas Canvas to check collision in
+ * @param tetromino Tetromino to check collision for
+ * @param direction Direction to check collision in
+ * @returns 
+ */
+const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[], direction: { x: number; y: number }): boolean => {
+  const collision = blocks.reduce((acc, block) => {
+    console.log(acc)
+  return collision;
+};
+
+
+/**
  * Makes all the blocks in the canvas inactive
  * @param state State to make all blocks inactive in
  * @returns New canvas with all blocks inactive
@@ -212,8 +247,8 @@ const makeAllBlocksInactive = (state: State): State => {
  * @param direction Movement direction (e.g., { x: -1, y: 0 } for left)
  * @returns Updated state
  */
-const moveActiveBlocks = (state: State, direction: { x: number; y: number }): State => {
-  const activeBlockPositions = updateActiveBlocks(state);
+const moveActiveTetromino = (state: State, direction: { x: number; y: number }): State => {
+  const activeBlockPositions = updateActiveBlocks(state); // the positions of all active blocks
 
   if (activeBlockPositions.length > 0 && (direction.x < 0)) { // if we are moving left
     const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for each active block we move it in the specified direction
@@ -221,6 +256,10 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
+      if (checkCollision(canvas)(state.activeBlockPositions, direction)) {
+        
+        return canvas;
+      }
       return moveBlock(canvas)(
         position.x,
         position.y
@@ -245,6 +284,9 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
+      if (checkCollision(canvas)(state.activeBlockPositions, direction)) {
+        return canvas;
+      }
       return moveBlock(canvas)(
         position.x,
         position.y
@@ -607,7 +649,7 @@ export function main() {
 
   const gravityTest = {
     // canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
-    canvas: spawnTetromino(Canvas)(squareBlock)(0, 0),
+    canvas: spawnTetromino(Canvas)(rightAngleBlock)(0, 0),
     activeBlockPositions: [],
     gameEnd: false
   };
@@ -651,7 +693,8 @@ export function main() {
             gameEnd: false,
           };
         } else if (event.type === "movement") {
-          return moveActiveBlocks(state, event.direction);
+          // return moveMultipleBlocks(state.canvas)(state.activeBlockPositions, event.direction);
+          return moveActiveTetromino(state, event.direction);
         }
         return state;
       },
