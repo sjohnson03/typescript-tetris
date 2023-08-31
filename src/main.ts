@@ -213,6 +213,17 @@ type Event = "keydown" | "keyup" | "keypress";
 const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[], direction: { x: number; y: number }): boolean => {
   const collision = blocks.reduce((acc, block) => {
     console.log(acc)
+    const x = block.x;
+    const y = block.y;
+    if (canvas[direction.y + y][direction.x + x] || direction.y + y >= Constants.GRID_HEIGHT || direction.x + x < 0 || direction.x + x >= Constants.GRID_WIDTH) {
+      if (canvas[direction.y + y][direction.x + x]?.isActive) {  return false || acc;  }
+      return true || acc;
+    }
+    else if (canvas[direction.y + y][direction.x + x]?.isActive){
+      return false || acc;
+    }
+    return acc;
+  }, false);
   return collision;
 };
 
