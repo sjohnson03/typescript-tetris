@@ -216,7 +216,6 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
-      console.log(newPosition)
       return moveBlock(canvas)(
         position.x,
         position.y
@@ -239,7 +238,6 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
-      console.log(newPosition)
       return moveBlock(canvas)(
         position.x,
         position.y
@@ -263,7 +261,6 @@ const moveActiveBlocks = (state: State, direction: { x: number; y: number }): St
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
-      console.log(newPosition)
       return moveBlock(canvas)(
         position.x,
         position.y
@@ -355,13 +352,11 @@ const moveBlock = (canvas: Canvas,) => (  x: number,  y: number,) => (  newX: nu
 
   if (newX < 0 || newX >= Constants.GRID_WIDTH) {
     return canvas; // If the new position is outside the canvas, return unchanged canvas
-    
   }
 
   if (newX >= 0 && newX < Constants.GRID_WIDTH && !canvas[newY][newX]) {
     const tempCanvas = removeBlockFromCanvas(canvas)(x, y);
     const updatedCanvas = addBlockToCanvas(tempCanvas)(block)(newX, newY);
-    // console.log(updatedCanvas)
     return updatedCanvas;
   } 
   // else if (block !== undefined && block.isActive) {
@@ -378,7 +373,6 @@ const moveBlock = (canvas: Canvas,) => (  x: number,  y: number,) => (  newX: nu
 
   //   return updatedCanvas;
   // }
-  console.log(canvas)
 
   return canvas;
 };
