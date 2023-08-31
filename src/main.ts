@@ -56,7 +56,7 @@ type Tetromino = {
 /**
   * Creates a block with the specified colour and status
   * @param colour Colour of the block
-  * @param status Status of the block
+  * @param status Status of the block expressed as a boolean
   * @returns Block with the specified colour and status
 */
 const createBlock = (colour: Colour, status = true): Block => ({
@@ -128,14 +128,20 @@ const leftAngleBlock: Tetromino = {
   // colour: "green" as Colour
 }
 
-const tBlock = {
+const tBlock: Tetromino = {
   //
   //  [][][]
   //    []
   blocks: [
-    [0,1], [1,1], [2,1], [1,0]
-  ],
-  colour: "yellow" as Colour
+    [createBlock("yellow"), 0, 0],
+    [createBlock("yellow"), 1, 0],
+    [createBlock("yellow"), 2, 0],
+    [createBlock("yellow"), 1, 1]
+  ]
+  // blocks: [
+  //   [0,1], [1,1], [2,1], [1,0]
+  // ],
+  // colour: "yellow" as Colour
 }
 
 const zBlock = {
@@ -212,11 +218,13 @@ type Event = "keydown" | "keyup" | "keypress";
  */
 const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[], direction: { x: number; y: number }): boolean => {
   const collision = blocks.reduce((acc, block) => {
-    console.log(acc)
     const x = block.x;
     const y = block.y;
-    if (canvas[direction.y + y][direction.x + x] || direction.y + y >= Constants.GRID_HEIGHT || direction.x + x < 0 || direction.x + x >= Constants.GRID_WIDTH) {
-      if (canvas[direction.y + y][direction.x + x]?.isActive) {  return false || acc;  }
+    if (direction.y + y >= Constants.GRID_HEIGHT) {return true || acc;} // at the bottom so always a collision
+    if (canvas[direction.y + y][direction.x + x] || direction.x + x < 0 || direction.x + x >= Constants.GRID_WIDTH) {
+      if (canvas[direction.y + y][direction.x + x]?.isActive) {  return false || acc;  } 
+      // if the block we see is active, we return false to allow movement
+      // Otherwise, we return true:
       return true || acc;
     }
     else if (canvas[direction.y + y][direction.x + x]?.isActive){
@@ -399,7 +407,7 @@ const spawnTetromino = (canvas: Canvas) => (tetromino: Tetromino) => (x: number,
 const moveBlock = (canvas: Canvas,) => (  x: number,  y: number,) => (  newX: number,  newY: number,): Canvas => {
   const block = canvas[y][x];
 
-  if (newX < 0 || newX >= Constants.GRID_WIDTH) {
+  if (newX < 0 || newX >= Constants.GRID_WIDTH || newY < 0 || newY >= Constants.GRID_HEIGHT) {
     return canvas; // If the new position is outside the canvas, return unchanged canvas
   }
 
@@ -660,7 +668,7 @@ export function main() {
 
   const gravityTest = {
     // canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
-    canvas: spawnTetromino(Canvas)(rightAngleBlock)(0, 0),
+    canvas: spawnTetromino(Canvas)(tBlock)(0, 0),
     activeBlockPositions: [],
     gameEnd: false
   };
