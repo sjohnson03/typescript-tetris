@@ -71,10 +71,10 @@ const squareBlock: Tetromino =
   // [][]
   {
   blocks: [
-    [createBlock("aqua"), 0, 0],
-    [createBlock("aqua"), 1, 0],
-    [createBlock("aqua"), 0, 1],
-    [createBlock("aqua"), 1, 1]
+    [createBlock("aqua", false), 0, 0],
+    [createBlock("aqua", false), 1, 0],
+    [createBlock("aqua", false), 0, 1],
+    [createBlock("aqua", false), 1, 1]
   ]
 };
 
@@ -225,6 +225,7 @@ const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[],
       if (canvas[direction.y + y][direction.x + x]?.isActive) {  return false || acc;  } 
       // if the block we see is active, we return false to allow movement
       // Otherwise, we return true:
+      console.log("collision")
       return true || acc;
     }
     else if (canvas[direction.y + y][direction.x + x]?.isActive){
@@ -437,22 +438,24 @@ const moveBlock = (canvas: Canvas,) => (  x: number,  y: number,) => (  newX: nu
 
 
 
-/**
- * Moves multiple blocks in the specified direction
- * @param canvas Canvas to update
- * @param blockPositions Array of block positions to move
- * @param direction Movement direction
- * @returns Updated canvas with blocks moved
- */
-const moveMultipleBlocks = (canvas: Canvas) => (blockPositions: { x: number; y: number }[], direction: { x: number; y: number }): Canvas => {
-  return blockPositions.reduce((updatedCanvas, position) => {
-    const { x, y } = position;
-    const newX = x + direction.x;
-    const newY = y + direction.y;
+// MAYBE REDUNDANT, IDK YET
 
-    return moveBlock(updatedCanvas)(x, y)(newX, newY);
-  }, canvas);
-};
+// /**
+//  * Moves multiple blocks in the specified direction
+//  * @param canvas Canvas to update
+//  * @param blockPositions Array of block positions to move
+//  * @param direction Movement direction
+//  * @returns Updated canvas with blocks moved
+//  */
+// const moveMultipleBlocks = (canvas: Canvas) => (blockPositions: { x: number; y: number }[], direction: { x: number; y: number }): Canvas => {
+//   return blockPositions.reduce((updatedCanvas, position) => {
+//     const { x, y } = position;
+//     const newX = x + direction.x;
+//     const newY = y + direction.y;
+
+//     return moveBlock(updatedCanvas)(x, y)(newX, newY);
+//   }, canvas);
+// };
 
 
 
@@ -470,23 +473,26 @@ const moveMultipleBlocks = (canvas: Canvas) => (blockPositions: { x: number; y: 
     }
   
     if (col >= Constants.GRID_WIDTH) {
-      return applyGravity(state, row - 1, 0); // Move to the previous row
+      return applyGravity(state, row - 1, 0); // Move to the next row
     }
   
     const currBlock = state.canvas[row][col];
   
     if (currBlock !== undefined) {
       if ("colour" in currBlock && currBlock.isActive) { // check to see if of type block and if block is active
-        if (row === Constants.GRID_HEIGHT - 1) { // check if block is at the bottom of the canvas
+        if (row === Constants.GRID_HEIGHT - 1 || checkCollision(state.canvas)(state.activeBlockPositions, { x: 0, y: 1 })) { // check if block is at the bottom of the canvas
           return makeAllBlocksInactive(state); // make all blocks inactive
+        }
           
-        } else if (state.canvas[row + 1][col]) { // check if there is a block below the current block
-          return applyGravity(state, row, col + 1); // Move to the next column
+        // } else if (state.canvas[row + 1][col]) { // check if there is a block below the current block
+        //   console.log(state.canvas[row + 1][col])
+        //   return applyGravity(state, row, col + 1); // Move to the next column
+        // } 
 
-        } else { // move the block down by one row
-          const updatedCanvas = moveMultipleBlocks(state.canvas)(state.activeBlockPositions, { x: 0, y: 1 }); // move all active blocks down 1
+        else { // move the block down by one row
+          const updatedCanvas = moveActiveTetromino(state, { x: 0, y: 1 }); // move all active blocks down 1
           return applyGravity({
-            canvas: updatedCanvas, gameEnd: false,
+            canvas: updatedCanvas.canvas, gameEnd: false,
             activeBlockPositions: state.activeBlockPositions
           }, row - 1, col);
         }
@@ -668,7 +674,7 @@ export function main() {
 
   const gravityTest = {
     // canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
-    canvas: spawnTetromino(Canvas)(tBlock)(0, 0),
+    canvas: spawnTetromino(spawnTetromino(Canvas)(tBlock)(0, 0))(squareBlock)(5,10),
     activeBlockPositions: [],
     gameEnd: false
   };
