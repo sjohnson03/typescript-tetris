@@ -14,8 +14,8 @@
 
 import "./style.css";
 
-import { Observable, fromEvent, interval, merge, of } from "rxjs";
-import { map, filter, scan, tap, takeUntil, switchMap } from "rxjs/operators";
+import { Observable, fromEvent, interval, merge, } from "rxjs";
+import { map, filter, scan, tap, mergeMap, take } from "rxjs/operators";
 
 /** Constants */
 
@@ -71,10 +71,10 @@ const squareBlock: Tetromino =
   // [][]
   {
   blocks: [
-    [createBlock("aqua", false), 0, 0],
-    [createBlock("aqua", false), 1, 0],
-    [createBlock("aqua", false), 0, 1],
-    [createBlock("aqua", false), 1, 1]
+    [createBlock("aqua"), 0, 0],
+    [createBlock("aqua",), 1, 0],
+    [createBlock("aqua",), 0, 1],
+    [createBlock("aqua",), 1, 1]
   ]
 };
 
@@ -164,7 +164,7 @@ const sBlock = {
   colour: "orange" as Colour
 }
 
-const allBlocks = [squareBlock, longBlock, rightAngleBlock, leftAngleBlock, tBlock, sBlock, zBlock];
+const allTetrominoes = [squareBlock, longBlock, rightAngleBlock, leftAngleBlock, tBlock];
 
 abstract class RNG {
   private static m = 0x80000000; // 2**31
@@ -173,12 +173,12 @@ abstract class RNG {
 
   public static hash = (seed: number) => (RNG.a * seed + RNG.c) % RNG.m;
   // scale has values to between 0 and length of allBlocks[]
-  public static scale = (hash: number) => Math.floor(hash / RNG.m * allBlocks.length);
+  public static scale = (hash: number) => Math.floor(hash / RNG.m * allTetrominoes.length);
 }
 
 function createRNGStreamFromSource<T>(source$: Observable<T>){
   return function createRNGStream(
-    seed: number = 0,
+    seed: number = RNG.hash(Date.now())
   ): Observable<Number>{
     const randomNumberStream = source$.pipe(
       scan((acc, _) => RNG.hash(acc), seed),
@@ -188,20 +188,13 @@ function createRNGStreamFromSource<T>(source$: Observable<T>){
   };
 }
 
-const randomStream = createRNGStreamFromSource(interval(1000));
-// we use this to create random blocks
 
-const randomBlockStream = randomStream(5).pipe(
-  // a stream of random blocks which can be spawned.
-  map((randomNumber) => {
-    allBlocks[+randomNumber];
-  })
-);
+
 
 
 /** User input */
 
-type Key = "KeyS" | "KeyA" | "KeyD";
+type Key = "KeyS" | "KeyA" | "KeyD" | "KeyR" | "KeyE";
 
 type Event = "keydown" | "keyup" | "keypress";
 
@@ -222,15 +215,16 @@ const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[],
     const y = block.y;
     if (direction.y + y >= Constants.GRID_HEIGHT) {return true || acc;} // at the bottom so always a collision
     if (canvas[direction.y + y][direction.x + x] || direction.x + x < 0 || direction.x + x >= Constants.GRID_WIDTH) {
-      if (canvas[direction.y + y][direction.x + x]?.isActive) {  return false || acc;  } 
+      
+      if (canvas[direction.y + y][direction.x + x]?.isActive) {  
+        return false || acc;  } 
       // if the block we see is active, we return false to allow movement
       // Otherwise, we return true:
-      console.log("collision")
       return true || acc;
     }
-    else if (canvas[direction.y + y][direction.x + x]?.isActive){
-      return false || acc;
-    }
+    // else if (canvas[direction.y + y][direction.x + x]?.isActive){
+    //   return false || acc;
+    // }
     return acc;
   }, false);
   return collision;
@@ -254,7 +248,9 @@ const makeAllBlocksInactive = (state: State): State => {
   });
   return {
     canvas: updatedCanvas,
+    previewCanvas: state.previewCanvas,
     activeBlockPositions: [],
+    nextTetromino: state.nextTetromino,
     gameEnd: false,
   };
 };
@@ -262,8 +258,8 @@ const makeAllBlocksInactive = (state: State): State => {
 
 
 /**
- * Moves all currently active blocks in specified direction
- * @param state Current state of active blocks
+ * Moves all currently active blocks in specified direction ensuring that no blocks collide as expected.
+ * @param state The current state
  * @param direction Movement direction (e.g., { x: -1, y: 0 } for left)
  * @returns Updated state
  */
@@ -276,8 +272,7 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
-      if (checkCollision(canvas)(state.activeBlockPositions, direction)) {
-        
+      if (checkCollision(canvas)(activeBlockPositions, direction)) {
         return canvas;
       }
       return moveBlock(canvas)(
@@ -290,10 +285,14 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
       canvas: updatedCanvas,
       activeBlockPositions: updateActiveBlocks({
         canvas: updatedCanvas,
+        previewCanvas: state.previewCanvas,
         activeBlockPositions: activeBlockPositions,
         gameEnd: false,
+        nextTetromino: state.nextTetromino
       }),
       gameEnd: false,
+      previewCanvas: state.previewCanvas,
+      nextTetromino: state.nextTetromino
     };
   }
   else if (activeBlockPositions.length > 0 && (direction.x > 0 || direction.y > 0)) { // if we are moving right or moving down
@@ -304,7 +303,7 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
         x: position.x + direction.x,
         y: position.y + direction.y,
       };
-      if (checkCollision(canvas)(state.activeBlockPositions, direction)) {
+      if (checkCollision(canvas)(activeBlockPositions, direction)) {
         return canvas;
       }
       return moveBlock(canvas)(
@@ -317,16 +316,24 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
       canvas: updatedCanvas,
       activeBlockPositions: updateActiveBlocks({
         canvas: updatedCanvas,
+        previewCanvas: state.previewCanvas,
         activeBlockPositions: activeBlockPositions,
         gameEnd: false,
+        nextTetromino: state.nextTetromino
       }),
+      previewCanvas: state.previewCanvas,
       gameEnd: false,
+      nextTetromino: state.nextTetromino
     };
   }
 
 
   return state;
 };
+
+// const rotateTetromino = (state: State, direction: number): State => {
+//   const activeBlockPositions = updateActiveBlocks(state); // the positions of all active blocks
+// }
 
 /**
  * Updates the activeBlocks array stored in the state for the currently active blocks in our game
@@ -384,9 +391,11 @@ const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas
   return updatedCanvas;
 };
 
-const spawnTetromino = (canvas: Canvas) => (tetromino: Tetromino) => (x: number, y: number): Canvas => {
+const spawnTetromino = (canvas: Canvas) => (tetromino: Tetromino) => (x: number, y: number, colour?: Colour): Canvas => {
   const updatedCanvas = tetromino.blocks.reduce((acc, block) => {
-    const [blockToAdd, blockX, blockY] = block;
+    const blockToAdd = createBlock(colour ? colour : block[0].colour, true);
+    const blockX = block[1];
+    const blockY = block[2];
     return addBlockToCanvas(acc)(blockToAdd)(blockX + x, blockY + y);
   }, canvas);
   return updatedCanvas;
@@ -417,47 +426,10 @@ const moveBlock = (canvas: Canvas,) => (  x: number,  y: number,) => (  newX: nu
     const updatedCanvas = addBlockToCanvas(tempCanvas)(block)(newX, newY);
     return updatedCanvas;
   } 
-  // else if (block !== undefined && block.isActive) {
-  //   console.log(canvas)
-  //   const dirX = newX - x;
-  //   const dirY = newY - y;
 
-  //   // const updatedCanvas = addBlockToCanvas(canvas)(block)(newX, newY);
-
-  //   const movedCanvas = moveBlock(canvas)(newX, newY)(newX + dirX, newY + dirY);
-  //   console.log(movedCanvas)
-  //   const tempCanvas = removeBlockFromCanvas(movedCanvas)(x, y);
-  //   const updatedCanvas = addBlockToCanvas(tempCanvas)(block)(newX, newY);
-
-  //   return updatedCanvas;
-  // }
 
   return canvas;
 };
-
-
-
-
-// MAYBE REDUNDANT, IDK YET
-
-// /**
-//  * Moves multiple blocks in the specified direction
-//  * @param canvas Canvas to update
-//  * @param blockPositions Array of block positions to move
-//  * @param direction Movement direction
-//  * @returns Updated canvas with blocks moved
-//  */
-// const moveMultipleBlocks = (canvas: Canvas) => (blockPositions: { x: number; y: number }[], direction: { x: number; y: number }): Canvas => {
-//   return blockPositions.reduce((updatedCanvas, position) => {
-//     const { x, y } = position;
-//     const newX = x + direction.x;
-//     const newY = y + direction.y;
-
-//     return moveBlock(updatedCanvas)(x, y)(newX, newY);
-//   }, canvas);
-// };
-
-
 
   /**
    * Applies gravity to the currently active (controlled by the player) blocks on the canvas.
@@ -483,39 +455,37 @@ const moveBlock = (canvas: Canvas,) => (  x: number,  y: number,) => (  newX: nu
         if (row === Constants.GRID_HEIGHT - 1 || checkCollision(state.canvas)(state.activeBlockPositions, { x: 0, y: 1 })) { // check if block is at the bottom of the canvas
           return makeAllBlocksInactive(state); // make all blocks inactive
         }
-          
-        // } else if (state.canvas[row + 1][col]) { // check if there is a block below the current block
-        //   console.log(state.canvas[row + 1][col])
-        //   return applyGravity(state, row, col + 1); // Move to the next column
-        // } 
 
         else { // move the block down by one row
           const updatedCanvas = moveActiveTetromino(state, { x: 0, y: 1 }); // move all active blocks down 1
           return applyGravity({
             canvas: updatedCanvas.canvas, gameEnd: false,
-            activeBlockPositions: state.activeBlockPositions
+            previewCanvas: state.previewCanvas,
+            activeBlockPositions: state.activeBlockPositions,
+            nextTetromino: state.nextTetromino
           }, row - 1, col);
         }
-      } else {
-        return applyGravity(state, row, col + 1); // Move to the next column
       }
-    } else {
+    } 
       return applyGravity(state, row, col + 1); // Move to the next column
-    }
   }
 
 /** State processing */
 
 type State = Readonly<{
   canvas: (Block | undefined)[][];
+  previewCanvas: (Block | undefined)[][];
   activeBlockPositions: { x: number; y: number }[];
   gameEnd: boolean;
+  nextTetromino: Tetromino;
 }>;
 
 const initialState: State = {
   canvas: Canvas,
+  previewCanvas: Canvas,
   activeBlockPositions: [],
   gameEnd: false,
+  nextTetromino: squareBlock
 };
 
 /**
@@ -565,12 +535,74 @@ const createSvgElement = (
   return elem;
 };
 
+/**
+ * Transforms the canvas into a 2D array of SVG elements.
+ * @param canvas Canvas to transform
+ * @returns 2D array of SVG elements
+ * 
+*/
+const transformCanvasToSVG = (canvas: Canvas, svg: SVGGraphicsElement & HTMLElement): SVGElement[][] => {
+  // Create a 2D array of SVG elements
+  const SVGElements: SVGElement[][] = canvas.map((row, index) => {// for each row in the input canvas
+    return row.map((block, colIndex) => { // for each block in the row
+      if (block) { // check if there is a block
+        const cube = createSvgElement(svg.namespaceURI, "rect", { // create an element for the block
+          height: `${BlockSize.HEIGHT}`,
+          width: `${BlockSize.WIDTH}`,
+          x: `${BlockSize.WIDTH * (colIndex)}`,
+          y: `${BlockSize.HEIGHT * (index)}`,
+          style: "fill: " + block.colour,
+        });
+        return cube; // Return the created SVG element
+      } else { // Create an empty SVG element for spaces in our canvas with no blocks, this makes TS happy
+        const emptyCube = createSvgElement(svg.namespaceURI, "rect", {
+          height: `${BlockSize.HEIGHT}`,
+          width: `${BlockSize.WIDTH}`,
+          x: `${BlockSize.WIDTH * (colIndex)}`,
+          y: `${BlockSize.HEIGHT * (index)}`,
+          style: "fill: black",
+        });
+        emptyCube.setAttribute("visibility", "hidden"); // Hide the empty SVG element
+        return emptyCube; // Return empty SVG element
+      }
+    });
+  });
+  return SVGElements; // return matrix of SVG elements
+};
+
+/**
+ * Updates the SVG canvas with a new canvas - impure function
+ * @param canvas Canvas to update the SVG canvas with
+*/
+const updateDisplayedCanvas = (canvas: Canvas, svg: SVGGraphicsElement & HTMLElement) => {
+  // Clear the SVG canvas by removing all child nodes
+  while (svg.firstChild) {
+    svg.removeChild(svg.firstChild);
+  }
+
+  const svgElements = transformCanvasToSVG(canvas, svg); // Transform the canvas to SVG elements
+
+  svgElements.forEach((row) => {
+    row.forEach((block) => {
+      if (block) {
+        svg.appendChild(block); // Append each SVG element to the SVG canvas
+      }
+    });
+  });
+  };
+
+
+
 
 /**
  * This is the function called on page load. Your main game loop
  * should be called here.
  */
 export function main() {
+
+
+
+
   // Canvas elements
   const svg = document.querySelector("#svgCanvas") as SVGGraphicsElement &
     HTMLElement;
@@ -600,81 +632,45 @@ export function main() {
   const left$ = fromKey("KeyA");
   const right$ = fromKey("KeyD");
   const down$ = fromKey("KeyS");
+  const rClockwise$ = fromKey("KeyR");
+  const rAntiClockwise$ = fromKey("KeyE");
 
   /** Observables */
   const moveLeft$ = left$.pipe(map(() => ({ x: -1, y: 0 })));
   const moveRight$ = right$.pipe(map(() => ({ x: 1, y: 0 })));
   const moveDown$ = down$.pipe(map(() => ({ x: 0, y: 1 })));
+  const rotateClockwise$ = rClockwise$.pipe(map(() => 1));
+  const rotateAntiClockwise$ = rAntiClockwise$.pipe(map(() => -1));
+
 
   const movement$ = merge(moveLeft$, moveRight$, moveDown$).pipe(
     map((movement) => ({ type: "movement", direction: movement }))
+  );
+
+  const rotation$ = merge(rotateClockwise$, rotateAntiClockwise$).pipe(
+    map((rotation) => ({ type: "rotation", direction: rotation }))
+  );
+
+  const randomStream$ = createRNGStreamFromSource(interval(Constants.TICK_RATE_MS));
+  // we use this to create random blocks
+
+  const randomTetromino$ = randomStream$().pipe(
+    map((randomNumber) => allTetrominoes[+randomNumber])
   );
 
 
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
 
-  /**
-   * Transforms the canvas into a 2D array of SVG elements.
-   * @param canvas Canvas to transform
-   * @returns 2D array of SVG elements
-   * 
-  */
-  const transformCanvasToSVG = (canvas: Canvas): SVGElement[][] => {
-    // Create a 2D array of SVG elements
-    const SVGElements: SVGElement[][] = canvas.map((row, index) => {// for each row in the input canvas
-      return row.map((block, colIndex) => { // for each block in the row
-        if (block) { // check if there is a block
-          const cube = createSvgElement(svg.namespaceURI, "rect", { // create an element for the block
-            height: `${BlockSize.HEIGHT}`,
-            width: `${BlockSize.WIDTH}`,
-            x: `${BlockSize.WIDTH * (colIndex)}`,
-            y: `${BlockSize.HEIGHT * (index)}`,
-            style: "fill: " + block.colour,
-          });
-          return cube; // Return the created SVG element
-        } else { // Create an empty SVG element for spaces in our canvas with no blocks, this makes TS happy
-          const emptyCube = createSvgElement(svg.namespaceURI, "rect", {
-            height: `${BlockSize.HEIGHT}`,
-            width: `${BlockSize.WIDTH}`,
-            x: `${BlockSize.WIDTH * (colIndex)}`,
-            y: `${BlockSize.HEIGHT * (index)}`,
-            style: "fill: black",
-          });
-          emptyCube.setAttribute("visibility", "hidden"); // Hide the empty SVG element
-          return emptyCube; // Return empty SVG element
-        }
-      });
-    });
-    return SVGElements; // return matrix of SVG elements
-  };
 
-  /**
-   * Updates the SVG canvas with a new canvas - impure function
-   * @param canvas Canvas to update the SVG canvas with
-  */
-  const updateDisplayedCanvas = (canvas: Canvas) => {
-    // Clear the SVG canvas by removing all child nodes
-    while (svg.firstChild) {
-      svg.removeChild(svg.firstChild);
-    }
   
-    const svgElements = transformCanvasToSVG(canvas); // Transform the canvas to SVG elements
-  
-    svgElements.forEach((row) => {
-      row.forEach((block) => {
-        if (block) {
-          svg.appendChild(block); // Append each SVG element to the SVG canvas
-        }
-      });
-    });
-  };
-
 
 
   const gravityTest = {
     // canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
     canvas: spawnTetromino(spawnTetromino(Canvas)(tBlock)(0, 0))(squareBlock)(5,10),
+    previewCanvas: spawnTetromino(Canvas)(longBlock)(2, 1),
+    nextTetromino: longBlock,
     activeBlockPositions: [],
     gameEnd: false
   };
@@ -692,34 +688,42 @@ export function main() {
 
   const render = (s: State) => {
   // Add blocks to the main grid canvas
-    updateDisplayedCanvas(s.canvas);
-
-
-    // Add a block to the preview canvas
-    const cubePreview = createSvgElement(preview.namespaceURI, "rect", {
-      height: `${BlockSize.HEIGHT}`,
-      width: `${BlockSize.WIDTH}`,
-      x: `${BlockSize.WIDTH * 2}`,
-      y: `${BlockSize.HEIGHT}`,
-      style: "fill: green",
-    });
-    preview.appendChild(cubePreview);
+    updateDisplayedCanvas(s.canvas, svg);
+    // Add blocks to the preview canvas
+    updateDisplayedCanvas(s.previewCanvas, preview);
   };
 
 
-  const source$ = merge(tick$, movement$)
+  const source$ = merge(tick$, movement$, rotation$)
   .pipe(
     scan(
       (state: State, event: any) => {
-        if (event.type !== "movement") {
+
+        if (event.type !== "movement" && event.type !== "rotation") {
+          if (updateActiveBlocks(state).length === 0) {      
+            const newBlock = allTetrominoes[RNG.scale(RNG.hash(Date.now()))];
+            return {
+              canvas: spawnTetromino(state.canvas)(state.nextTetromino)(5, 0),
+              previewCanvas: spawnTetromino(Canvas)(newBlock)(2, 1),
+              activeBlockPositions: updateActiveBlocks(state),
+              nextTetromino: newBlock,
+              gameEnd: false,
+            };
+          }
+          
           return {
             canvas: applyGravity(state).canvas,
+            previewCanvas: state.previewCanvas,
             activeBlockPositions: updateActiveBlocks(state),
+            nextTetromino: state.nextTetromino,
             gameEnd: false,
           };
         } else if (event.type === "movement") {
           // return moveMultipleBlocks(state.canvas)(state.activeBlockPositions, event.direction);
           return moveActiveTetromino(state, event.direction);
+        }
+        else if (event.type === "rotation") {
+          // return rotateTetromino(state, event.direction);
         }
         return state;
       },
@@ -744,8 +748,6 @@ export function main() {
 if (typeof window !== "undefined") {
   window.onload = () => {
     main();
-
-
 
   };
 }
