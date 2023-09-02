@@ -160,21 +160,6 @@ abstract class RNG {
   public static scale = (hash: number) => Math.floor(hash / RNG.m * allTetrominoes.length);
 }
 
-function createRNGStreamFromSource<T>(source$: Observable<T>) {
-  return function createRNGStream(
-    seed: number = RNG.hash(Date.now())
-  ): Observable<Number> {
-    const randomNumberStream = source$.pipe(
-      scan((acc, _) => RNG.hash(acc), seed),
-      map(RNG.scale),
-    );
-    return randomNumberStream;
-  };
-}
-
-
-
-
 
 /** User input */
 
@@ -184,7 +169,6 @@ type Event = "keydown" | "keyup" | "keypress";
 
 
 /** Utility functions */
-
 
 /**
  * 
@@ -197,7 +181,8 @@ const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[],
   const collision = blocks.reduce((acc, block) => {
     const x = block.x;
     const y = block.y;
-    if (direction.y + y >= Constants.GRID_HEIGHT + 2) { return true || acc; } // at the bottom so always a collision
+    // check if we are trying to mvoe below or above the canvas, if so there is definitely a collision
+    if (direction.y + y >= Constants.GRID_HEIGHT + 2 || direction.y + y <= 0) { return true || acc; } 
     if (canvas[direction.y + y][direction.x + x] || direction.x + x < 0 || direction.x + x >= Constants.GRID_WIDTH) {
 
       if (canvas[direction.y + y][direction.x + x]?.isActive) {
@@ -304,42 +289,55 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
 };
 
 
-
+/**
+ * Performs rotation on the currently active tetromino in a specified direction (clockwise or anticlockwise)
+ * @param state state which contains tetrmonio to rotate
+ * @param direction direction to rotate in (1 for clockwise, -1 for anticlockwise)
+ * @returns new state with rotated tetromino
+ */
 const rotateTetromino = (state: State, direction: number): State => {
 
-  const rotationHelper = (blocks: {x: number, y: number}[], rotationDirection = direction) => {
+  /**
+   * Helper function to apply rotation to a set of blocks around it's centre of rotation
+   * Idea gathered from: https://stackoverflow.com/questions/233850/tetris-piece-rotation-algorithm
+   * and https://en.wikipedia.org/wiki/Rotation_matrix
+   * @param blocks positions of blocks to rotate
+   * @param rotationDirection direction to rotate in (1 for clockwise, -1 for anticlockwise)
+   * @returns new positions of blocks after rotation
+   */
+  const rotationHelper = (blocks: {x: number, y: number}[], rotationDirection = direction): {x: number, y: number}[] => {
     if (rotationDirection == 1) { // rotate clockwise
     return blocks.map((block) => {
     return {
+      // If a block of a piece starts at (1,2) it moves clockwise to (2,-1) and (-1,-2) and (-1, 2). 
+      // Apply this for each block and the piece is rotated.
       x: block.x * 0 + block.y * 1,
       y: block.x * -1 + block.y * 0,
     }})}
     else if (rotationDirection == -1) { // rotate anticlockwise
       return blocks.map((block) => {
       return {
-        // https://en.wikipedia.org/wiki/Rotation_matrix
-        // If a block of a piece starts at (1,2) it moves clockwise to (2,-1) and (-1,-2) and (-1, 2). Apply this for each block and the piece is rotated.
         x: block.x * 0 + block.y * -1,
         y: block.x * 1 + block.y * 0,
       }
     })}
     else {
-      console.log("error")
+      console.error("Error applying rotation");
       return blocks;
     }
   }
 
   const activeBlockPositions = updateActiveBlocks(state); // update all the positions of active blocks
 
-  // remove the active blocks from the canvas
+  if (activeBlockPositions.length == 0) {
+    return state; // no active blocks to move, no point in executing this function
+  }
+
+  // Remove the active blocks from the canvas
+  // This is so we don't have to worry about pieces colliding with themselves when rotating
   const removedActiveBlock = activeBlockPositions.reduce((canvas, position) => {
     return removeBlockFromCanvas(canvas)(position.x, position.y);
   }, state.canvas);
-
-
-  if (activeBlockPositions.length < 0) {
-    return state; // no active blocks to move, no point in executing this function
-  }
 
   // first we need to find the centre of rotation
   const centreOfRotation = activeBlockPositions.reduce((acc, block) => {
@@ -352,12 +350,12 @@ const rotateTetromino = (state: State, direction: number): State => {
   centreOfRotation.y = centreOfRotation.y / activeBlockPositions.length
 
 
-  // rotation assumes the origin is located at point (0,0) so we need to translate the blocks to the origin
+  // Rotation assumes the origin is located at point (0,0) so we need to translate the blocks to the origin
+  // Inspired by stackoverflow post: https://stackoverflow.com/questions/233850/tetris-piece-rotation-algorithm
   const translatedBlocks = activeBlockPositions.map((block) => {
-    console.log(centreOfRotation.x - block.x, centreOfRotation.y - block.y)
     return {
-      x: (block.x - centreOfRotation.x) * -1,
-      y: (block.y - centreOfRotation.y) * -1,
+      x: (block.x - centreOfRotation.x),
+      y: (block.y - centreOfRotation.y),
     };
   });
   const rotatedBlocks = rotationHelper(translatedBlocks);
@@ -375,18 +373,17 @@ const rotateTetromino = (state: State, direction: number): State => {
     return state; // if they will collide, we return the state unchanged
   }
 
+  // We store the colour of one of the active blocks so we can use it to create new roated blocks
   const colour = state.canvas[activeBlockPositions[0].y][activeBlockPositions[0].x]?.colour;
 
+  // Create a new tetromino with the the blocks rotated
   const updatedTetronimo: Tetromino = {
     blocks: updatedBlocks.map((block) => {
       return [createBlock(colour ? colour : "blue"), block.x, block.y];
     }),
 
   }
-    // take the active blocks and move them in their rotated states
-    
-
-  return {
+  return { // Return a new state with the rotated tetromino
     ...state,
     canvas: spawnTetromino(removedActiveBlock)(updatedTetronimo)(0, 0),
     activeBlockPositions: updatedBlocks,
@@ -501,8 +498,8 @@ const rotateTetromino = (state: State, direction: number): State => {
    * Applies gravity to the currently active (controlled by the player) blocks on the canvas.
    * This is done recursively starting from the bottom row and making our way up
    * @param state Current state
-   * @param row Current row to process
-   * @param col Current column to process
+   * @param row Current row to process, by default the bottom row
+   * @param col Current column to process, by default the leftmost column
    * @returns Updated state
   */
   function applyGravity(state: State, row: number = Constants.GRID_HEIGHT + 1, col: number = 0): State {
@@ -544,6 +541,7 @@ const rotateTetromino = (state: State, direction: number): State => {
     nextTetromino: Tetromino;
   }>;
 
+  // Initial state for starting a game
   const initialState: State = {
     canvas: Canvas,
     previewCanvas: Canvas,
@@ -723,8 +721,6 @@ const rotateTetromino = (state: State, direction: number): State => {
       gameEnd: false
     };
 
-
-
     /**
      * Renders the current state to the canvas.
      *
@@ -772,7 +768,6 @@ const rotateTetromino = (state: State, direction: number): State => {
             }
             else if (event.type === "rotation") {
               // return rotateTetromino(state, event.direction);
-              console.log("rotation " + event.direction);
               return rotateTetromino(state, event.direction);
             }
             return state;
