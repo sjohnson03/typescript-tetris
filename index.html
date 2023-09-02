@@ -9,8 +9,9 @@
       <svg id="svgCanvas">
         <!-- game over text box -->
         <g id="gameOver" visibility="hidden">
-          <rect x="26" y="120" fill="white" height="48" width="149"></rect>
+          <rect x="12" y="120" fill="white" height="65" width="179"></rect>
           <text x="36" y="150">Game Over</text>
+          <text x="17" y="175">Press [R]estart</text>
         </g>
       </svg>
       <div id="sideBar" class="flex col">
@@ -28,7 +29,18 @@
             <span class="left">Highscore: </span>
             <span class="right" id="highScoreText">...</span>
           </div>
-        </div>
+          <div class="text">
+            <span class="left">Controls: </span>
+            <span class="right">
+              <ul>
+                <li>Move Left: <kbd>A</kbd></li>
+                <li>Move Right: <kbd>D</kbd></li>
+                <li>Move Down: <kbd>S</kbd></li>
+                <li>Rotate Clockwise: <kbd>R</kbd></li>
+                <li>Rotate Anti-Clockwise: <kbd>E</kbd></li>
+              </ul>
+            </span>
+          </div>
       </div>
     </main>
     <audio autoplay controls=""  src="./assets/tetris.mp3" loop ></audio>
