@@ -41,7 +41,7 @@ type Canvas = (Block | undefined)[][];
 
 const Canvas: (Block | undefined)[][] = new Array(Constants.GRID_HEIGHT + 2).fill(new Array(Constants.GRID_WIDTH).fill(undefined));
 
-type Colour = "aqua" | "red" | "blue" | "green" | "yellow" | "purple" | "orange";
+type Colour = "aqua" | "red" | "blue" | "green" | "yellow" | "purple" | "orange" | "grey";
 
 type Block = {
   colour: Colour;
@@ -594,7 +594,8 @@ const rotateTetromino = (state: State, direction: number): State => {
     activeBlockPositions: [],
     score: 0,
     level: 1,
-    gameEnd: true,
+    highScore: 0,
+    gameEnd: false,
     nextTetromino: squareBlock
   };
 
@@ -798,7 +799,18 @@ const rotateTetromino = (state: State, direction: number): State => {
                   highScore: state.highScore,
                 }
               }
-              return state;
+              return { // return a new state will all block coloured grey
+                ...state,
+                canvas: state.canvas.map((row) => {
+                  return row.map((block) => {
+                    if (block) {
+                      block.colour = "grey";
+                    }
+                    return block;
+                  })
+                })
+
+              }
             }
 
             if (event.type !== "movement" && event.type !== "rotation") {
