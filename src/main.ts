@@ -200,6 +200,49 @@ const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[],
   return collision;
 };
 
+const checkForTetris = (state: State): State => {
+  const updatedCanvas = state.canvas.reduce((acc, row, rowIndex): Canvas => {
+    const isTetris = row.reduce((acc, block, colIndex) => {
+      
+      if (block && !block.isActive) {
+        return true && acc;
+      }
+      return false && acc;
+    }, true); 
+
+    if (isTetris) {
+      return [[...new Array(Constants.GRID_WIDTH).fill(undefined)], ...acc]; // Add a new empty row at the top so we can move all the rows down
+    }
+    // otherwise we keep the row as is
+    return [...acc, row];
+  }, [] as Canvas);
+
+
+  // Calculate how many rows were moved down
+  const rowsReplaced = state.canvas.filter((row, rowIndex) => {
+    const isTetris = row.reduce((acc, block, colIndex) => {
+      if (block && !block.isActive) {
+        return true && acc;
+      }
+      return false && acc;
+    }, true);
+    return isTetris;
+  }).length;
+
+  // Update the score and level
+  const score = state.score + rowsReplaced * 100;
+  console.log(rowsReplaced)
+  const level = Math.floor(score / 1000) + 1; // level up every 1000 points
+  return {
+    ...state,
+    canvas: [...updatedCanvas, ...new Array(rowsReplaced).fill(new Array(Constants.GRID_WIDTH).fill(undefined))],
+    score,
+    level,
+  };
+};
+
+    
+
 /**
  * Makes all the blocks in the canvas inactive
  * @param state State to make all blocks inactive in
@@ -538,6 +581,9 @@ const rotateTetromino = (state: State, direction: number): State => {
     previewCanvas: (Block | undefined)[][];
     activeBlockPositions: { x: number; y: number }[];
     gameEnd: boolean;
+    score: number;
+    level: number;
+    highScore?: number;
     nextTetromino: Tetromino;
   }>;
 
@@ -546,7 +592,9 @@ const rotateTetromino = (state: State, direction: number): State => {
     canvas: Canvas,
     previewCanvas: Canvas,
     activeBlockPositions: [],
-    gameEnd: false,
+    score: 0,
+    level: 1,
+    gameEnd: true,
     nextTetromino: squareBlock
   };
 
@@ -743,24 +791,45 @@ const rotateTetromino = (state: State, direction: number): State => {
         scan(
           (state: State, event: any) => {
 
-            if (event.type !== "movement" && event.type !== "rotation") {
-              if (updateActiveBlocks(state).length === 0) {
-                const newBlock = allTetrominoes[RNG.scale(RNG.hash(Date.now()))]; // shoutout Luke Ferrier on Ed for this idea
+            if (state.gameEnd) {
+              if (event.type === "rotation") {
                 return {
-                  canvas: spawnTetromino(state.canvas)(state.nextTetromino)(4, 0),
+                  ...initialState,
+                  highScore: state.highScore,
+                }
+              }
+              return state;
+            }
+
+            if (event.type !== "movement" && event.type !== "rotation") {
+              if (updateActiveBlocks(state).length === 0) { // if all blocks are now inactive
+                const updatedState = checkForTetris(state);
+                const newBlock = allTetrominoes[RNG.scale(RNG.hash(Date.now()))]; // shoutout Luke Ferrier on Ed for this idea
+                const topRowOccupied = updatedState.canvas[0].some((block) => block && !block.isActive); // check if the top row is occupied
+
+                if (topRowOccupied) {
+                  return {
+                    ...updatedState,
+                    highScore: updatedState.score,
+                    gameEnd: true, // Set the gameEnd flag to true
+                  };
+                }
+
+                return {
+                  ...updatedState,
+                  canvas: spawnTetromino(updatedState.canvas)(updatedState.nextTetromino)(4, 0),
                   previewCanvas: spawnTetromino(Canvas)(newBlock)(2, 3),
-                  activeBlockPositions: updateActiveBlocks(state),
+                  activeBlockPositions: updateActiveBlocks(updatedState),
                   nextTetromino: newBlock,
-                  gameEnd: false,
                 };
               }
-
+              // Just apply gravity
               return {
+                ...state,
                 canvas: applyGravity(state).canvas,
                 previewCanvas: state.previewCanvas,
                 activeBlockPositions: updateActiveBlocks(state),
                 nextTetromino: state.nextTetromino,
-                gameEnd: false,
               };
             } else if (event.type === "movement") {
               // return moveMultipleBlocks(state.canvas)(state.activeBlockPositions, event.direction);
@@ -778,8 +847,13 @@ const rotateTetromino = (state: State, direction: number): State => {
 
       .subscribe((s: State) => {
         render(s);
+        levelText.innerHTML = s.level.toString();
+        scoreText.innerHTML = s.score.toString();
+        highScoreText.innerHTML = s.highScore ? s.highScore.toString() : "0";
+
 
         if (s.gameEnd) {
+          svg.appendChild(gameover);
           show(gameover);
         } else {
           hide(gameover);
