@@ -54,7 +54,7 @@ type Tetromino = {
 
 
 /**
-  * Creates a block with the specified colour and status
+  * Creates a block with the specified colour and status. Just a bit easier to instantiate blocks this way
   * @param colour Colour of the block
   * @param status Status of the block expressed as a boolean
   * @returns Block with the specified colour and status
@@ -181,7 +181,7 @@ const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[],
   const collision = blocks.reduce((acc, block) => {
     const x = block.x;
     const y = block.y;
-    // check if we are trying to mvoe below or above the canvas, if so there is definitely a collision
+    // check if we are trying to move below or above the canvas, if so there is definitely a collision
     if (direction.y + y >= Constants.GRID_HEIGHT + 2 || direction.y + y <= 0) { return true || acc; }
     if (canvas[direction.y + y][direction.x + x] || direction.x + x < 0 || direction.x + x >= Constants.GRID_WIDTH) {
 
@@ -192,9 +192,6 @@ const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[],
       // Otherwise, we return true:
       return true || acc;
     }
-    // else if (canvas[direction.y + y][direction.x + x]?.isActive){
-    //   return false || acc;
-    // }
     return acc;
   }, false);
   return collision;
@@ -234,6 +231,7 @@ const checkForTetris = (state: State): State => {
   const level = Math.floor(score / 500) + 1; // level up every 500 points
   return {
     ...state,
+    // new canvas with the rows removed
     canvas: [...updatedCanvas, ...new Array(rowsReplaced).fill(new Array(Constants.GRID_WIDTH).fill(undefined))],
     score,
     level,
@@ -247,7 +245,6 @@ const checkForTetris = (state: State): State => {
  * @param state State to make all blocks inactive in
  * @returns New canvas with all blocks inactive
 */
-
 const makeAllBlocksInactive = (state: State): State => {
   const updatedCanvas = state.canvas.map((row) => {
     return row.map((block) => {
@@ -284,10 +281,7 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
       if (checkCollision(canvas)(activeBlockPositions, direction)) {
         return canvas;
       }
-      return moveBlock(canvas)(
-        position.x,
-        position.y
-      )(newPosition.x, newPosition.y);
+      return moveBlock(canvas)(position.x, position.y)(newPosition.x, newPosition.y);
     }, state.canvas);
 
     return {
@@ -310,10 +304,7 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
       if (checkCollision(canvas)(activeBlockPositions, direction)) {
         return canvas;
       }
-      return moveBlock(canvas)(
-        position.x,
-        position.y
-      )(newPosition.x, newPosition.y);
+      return moveBlock(canvas)(position.x, position.y)(newPosition.x, newPosition.y);
     }, state.canvas);
 
     return {
@@ -818,7 +809,7 @@ export function main() {
           if (event.type !== "movement" && event.type !== "rotation") {
             if (updateActiveBlocks(state).length === 0) { // if all blocks are now inactive
               const updatedState = checkForTetris(state);
-              const newBlock = allTetrominoes[RNG.scale(RNG.hash(Date.now()))]; // shoutout Luke Ferrier on Ed for this idea
+              const newBlock = allTetrominoes[RNG.scale(RNG.hash(Date.now()))]; // shoutout Luke Ferrier on Ed for this idea, idk if this is pure though
               const topRowOccupied = updatedState.canvas[0].some((block) => block && !block.isActive); // check if the top row is occupied
 
               if (topRowOccupied) {
