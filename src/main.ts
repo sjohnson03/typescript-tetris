@@ -156,7 +156,7 @@ abstract class RNG {
   private static c = 12345;
 
   public static hash = (seed: number) => (RNG.a * seed + RNG.c) % RNG.m;
-  // scale has values to between 0 and length of allBlocks[]
+  // scale has values to between 0 and length of allTetrominoes
   public static scale = (hash: number) => Math.floor(hash / RNG.m * allTetrominoes.length);
 }
 
@@ -237,7 +237,6 @@ const checkForTetris = (state: State): State => {
     level,
   };
 };
-
 
 
 /**
@@ -331,7 +330,8 @@ const moveActiveTetromino = (state: State, direction: { x: number; y: number }):
 const rotateTetromino = (state: State, direction: number): State => {
 
   /**
-   * Helper function to apply rotation to a set of blocks around it's centre of rotation
+   * Helper function to apply rotation to a set of blocks around it's centre of rotation.
+   * Function assumes blocks are centred around the origin and we apply a rotation matrix to them.
    * Idea gathered from: https://stackoverflow.com/questions/233850/tetris-piece-rotation-algorithm
    * and https://en.wikipedia.org/wiki/Rotation_matrix
    * @param blocks positions of blocks to rotate
@@ -498,8 +498,6 @@ const spawnTetromino = (canvas: Canvas) => (tetromino: Tetromino) => (x: number,
 };
 
 
-
-
 /**
  * Moves a block at a specified position on the canvas to a new position
  * considering potential interactions with other blocks.
@@ -518,14 +516,14 @@ const moveBlock = (canvas: Canvas,) => (x: number, y: number,) => (newX: number,
     return canvas; // If the new position is outside the canvas, return unchanged canvas
   }
 
-  if (force) { // if force is true we move the block no matter what
+  if (force) { // Add the block to the new position, regardless of whether there is a block there or not
     return addBlockToCanvas(canvas[newY][newX] ? canvas : removeBlockFromCanvas(canvas)(x, y))(block)(newX, newY);
   }
 
   if ((newX >= 0 && newX < Constants.GRID_WIDTH && !canvas[newY][newX])) {
+    // Add the block to the new position if there is no block there already
     return addBlockToCanvas(canvas[newY][newX] ? canvas : removeBlockFromCanvas(canvas)(x, y))(block)(newX, newY);
   }
-
 
   return canvas;
 };
@@ -589,7 +587,7 @@ const initialState: State = {
   level: 1,
   highScore: 0,
   gameEnd: false,
-  nextTetromino: squareBlock
+  nextTetromino: allTetrominoes[RNG.scale(RNG.hash(Date.now()))],
 };
 
 /**
@@ -773,9 +771,9 @@ export function main() {
    */
 
   const render = (s: State) => {
-    // Add blocks to the main grid canvas
+    // Render the main display canvas
     updateDisplayedCanvas(s.canvas, svg);
-    // Add blocks to the preview canvas
+    // Render the preview canvas
     updateDisplayedCanvas(s.previewCanvas, preview);
   };
 
