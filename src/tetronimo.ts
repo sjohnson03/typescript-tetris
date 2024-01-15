@@ -1,5 +1,9 @@
-import { Block, Colour, Tetromino, createBlock} from "./block";
+/**
+ * Tetrominoes are the shapes that make up the game of Tetris. They are composed of four square blocks arranged in different configurations.
+ * File contains all the tetrominoes used in the game.
+ */
 
+import {Tetromino, createBlock} from "./block";
 
 const squareBlock: Tetromino =
 // [][]

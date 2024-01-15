@@ -32,7 +32,6 @@ abstract class RNG {
 
 type Key = "KeyS" | "KeyA" | "KeyD" | "KeyR" | "KeyE";
 
-type Event = "keydown" | "keyup" | "keypress";
 
 
 

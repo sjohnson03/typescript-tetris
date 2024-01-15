@@ -1,6 +1,9 @@
-import "./util.ts"; 
+/**
+ * Handles all movement of blocks on the canvas.
+ * Overall movement is done a bit jankily by treating each block in a tetrmonio as a separate entity.
+ */
 import { State } from "./state.ts";
-import { checkCollision, spawnTetromino,} from "./util.ts";
+import { checkCollision, spawnTetromino, makeAllBlocksInactive} from "./util.ts";
 import { Constants } from "./consts.ts";
 import { Canvas } from "./canvas.ts";
 import { Block, Tetromino, createBlock } from "./block.ts";
@@ -255,3 +258,41 @@ export const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number):
     );
     return updatedCanvas;
   };
+
+/**
+ * Applies gravity to the currently active (controlled by the player) blocks on the canvas.
+ * This is done recursively starting from the bottom row and making our way up
+ * @param state Current state
+ * @param row Current row to process, by default the bottom row
+ * @param col Current column to process, by default the leftmost column
+ * @returns Updated state
+*/
+export function applyGravity(state: State, row: number = Constants.GRID_HEIGHT + 1, col: number = 0): State {
+    if (row < 0) {
+      return state; // Base case: we have processed all rows
+    }
+  
+    if (col >= Constants.GRID_WIDTH) {
+      return applyGravity(state, row - 1, 0); // Move to the next row
+    }
+  
+    const currBlock = state.canvas[row][col];
+  
+    if (currBlock !== undefined) {
+      if ("colour" in currBlock && currBlock.isActive) { // check to see if of type block and if block is active
+        if (row === Constants.GRID_HEIGHT + state.level || checkCollision(state.canvas)(state.activeBlockPositions, { x: 0, y: 1 })) { // check if block is at the bottom of the canvas
+          return makeAllBlocksInactive(state); // make all blocks inactive
+        }
+  
+        else { // move the block down by one row
+          const updatedState = moveActiveTetromino(state, { x: 0, y: 1 }); // move all active blocks down 1
+          return applyGravity({
+            ...state,
+            canvas: updatedState.canvas,
+          }, row - 1, col);
+        }
+      }
+    }
+    return applyGravity(state, row, col + 1); // Move to the next column
+  }
+  
