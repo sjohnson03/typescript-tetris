@@ -8,21 +8,12 @@ import "./style.css";
 import { Observable, fromEvent, interval, merge, } from "rxjs";
 import { map, filter, scan, tap, mergeMap, take } from "rxjs/operators";
 import { State } from "./state.ts";
-import {  makeAllBlocksInactive, checkCollision, checkForTetris, spawnTetromino } from "./util.ts";
-import { moveActiveTetromino, updateActiveBlocks, rotateTetromino } from "./movement.ts";
+import {  checkForTetris, spawnTetromino } from "./util.ts";
+import { moveActiveTetromino, updateActiveBlocks, rotateTetromino, applyGravity } from "./movement.ts";
 import { Constants, Viewport } from "./consts.ts";
 import { allTetrominoes } from "./tetronimo.ts";
-import { Canvas } from "./canvas.ts";
-import { BlockSize } from "./block.ts";
-
-/** Constants */
-
-
-
-
-
-// Types of tetrominoes
-
+import { Canvas, gameover, preview, svg } from "./canvas.ts";
+import { render, show, hide } from "./render.ts";
 
 
 
@@ -43,56 +34,6 @@ type Key = "KeyS" | "KeyA" | "KeyD" | "KeyR" | "KeyE";
 
 type Event = "keydown" | "keyup" | "keypress";
 
-
-/** Utility functions */
-
-
-// ** MOVEMENT FUNCTIONS **
-
-
-
-
-
-
-
-/**
- * Applies gravity to the currently active (controlled by the player) blocks on the canvas.
- * This is done recursively starting from the bottom row and making our way up
- * @param state Current state
- * @param row Current row to process, by default the bottom row
- * @param col Current column to process, by default the leftmost column
- * @returns Updated state
-*/
-function applyGravity(state: State, row: number = Constants.GRID_HEIGHT + 1, col: number = 0): State {
-  if (row < 0) {
-    return state; // Base case: we have processed all rows
-  }
-
-  if (col >= Constants.GRID_WIDTH) {
-    return applyGravity(state, row - 1, 0); // Move to the next row
-  }
-
-  const currBlock = state.canvas[row][col];
-
-  if (currBlock !== undefined) {
-    if ("colour" in currBlock && currBlock.isActive) { // check to see if of type block and if block is active
-      if (row === Constants.GRID_HEIGHT + state.level || checkCollision(state.canvas)(state.activeBlockPositions, { x: 0, y: 1 })) { // check if block is at the bottom of the canvas
-        return makeAllBlocksInactive(state); // make all blocks inactive
-      }
-
-      else { // move the block down by one row
-        const updatedState = moveActiveTetromino(state, { x: 0, y: 1 }); // move all active blocks down 1
-        return applyGravity({
-          ...state,
-          canvas: updatedState.canvas,
-        }, row - 1, col);
-      }
-    }
-  }
-  return applyGravity(state, row, col + 1); // Move to the next column
-}
-
-/** State processing */
 
 
 // Initial state for starting a game
@@ -115,100 +56,7 @@ const initialState: State = {
  */
 const tick = (s: State) => s;
 
-/** Rendering (side effects) */
 
-/**
- * Displays a SVG element on the canvas. Brings to foreground.
- * @param elem SVG element to display
- */
-const show = (elem: SVGGraphicsElement) => {
-  elem.setAttribute("visibility", "visible");
-  elem.parentNode!.appendChild(elem);
-};
-
-/**
- * Hides a SVG element on the canvas.
- * @param elem SVG element to hide
- */
-const hide = (elem: SVGGraphicsElement) =>
-  elem.setAttribute("visibility", "hidden");
-
-/**
- * Creates an SVG element with the given properties.
- *
- * See https://developer.mozilla.org/en-US/docs/Web/SVG/Element for valid
- * element names and properties.
- *
- * @param namespace Namespace of the SVG element
- * @param name SVGElement name
- * @param props Properties to set on the SVG element
- * @returns SVG element
- */
-const createSvgElement = (
-  namespace: string | null,
-  name: string,
-  props: Record<string, string> = {}
-) => {
-  const elem = document.createElementNS(namespace, name) as SVGElement;
-  Object.entries(props).forEach(([k, v]) => elem.setAttribute(k, v));
-  return elem;
-};
-
-/**
- * Transforms the canvas into a 2D array of SVG elements.
- * @param canvas Canvas to transform
- * @returns 2D array of SVG elements
- * 
-*/
-const transformCanvasToSVG = (canvas: Canvas, svg: SVGGraphicsElement & HTMLElement): SVGElement[][] => {
-  // Create a 2D array of SVG elements
-  const SVGElements: SVGElement[][] = canvas.map((row, index) => {// for each row in the input canvas
-    return row.map((block, colIndex) => { // for each block in the row
-      if (block) { // check if there is a block
-        const cube = createSvgElement(svg.namespaceURI, "rect", { // create an element for the block
-          height: `${BlockSize.HEIGHT}`,
-          width: `${BlockSize.WIDTH}`,
-          x: `${BlockSize.WIDTH * (colIndex)}`,
-          y: `${BlockSize.HEIGHT * (index - 2)}`,
-          style: "fill: " + block.colour,
-        });
-        return cube; // Return the created SVG element
-      } else { // Create an empty SVG element for spaces in our canvas with no blocks, this makes TS happy
-        const emptyCube = createSvgElement(svg.namespaceURI, "rect", {
-          height: `${BlockSize.HEIGHT}`,
-          width: `${BlockSize.WIDTH}`,
-          x: `${BlockSize.WIDTH * (colIndex)}`,
-          y: `${BlockSize.HEIGHT * (index)}`,
-          style: "fill: black",
-        });
-        emptyCube.setAttribute("visibility", "hidden"); // Hide the empty SVG element
-        return emptyCube; // Return empty SVG element
-      }
-    });
-  });
-  return SVGElements; // return matrix of SVG elements
-};
-
-/**
- * Updates the SVG canvas with a new canvas - impure function
- * @param canvas Canvas to update the SVG canvas with
-*/
-const updateDisplayedCanvas = (canvas: Canvas, svg: SVGGraphicsElement & HTMLElement) => {
-  // Clear the SVG canvas by removing all child nodes
-  while (svg.firstChild) {
-    svg.removeChild(svg.firstChild);
-  }
-
-  const svgElements = transformCanvasToSVG(canvas, svg); // Transform the canvas to SVG elements
-
-  svgElements.forEach((row) => {
-    row.forEach((block) => {
-      if (block) {
-        svg.appendChild(block); // Append each SVG element to the SVG canvas
-      }
-    });
-  });
-};
 
 /**
  * This is the function called on page load. Your main game loop
@@ -216,15 +64,6 @@ const updateDisplayedCanvas = (canvas: Canvas, svg: SVGGraphicsElement & HTMLEle
  */
 export function main() {
 
-
-  // Canvas elements
-  const svg = document.querySelector("#svgCanvas") as SVGGraphicsElement &
-    HTMLElement;
-  const preview = document.querySelector("#svgPreview") as SVGGraphicsElement &
-    HTMLElement;
-  const gameover = document.querySelector("#gameOver") as SVGGraphicsElement &
-    HTMLElement;
-  const container = document.querySelector("#main") as HTMLElement;
 
   svg.setAttribute("height", `${Viewport.CANVAS_HEIGHT}`);
   svg.setAttribute("width", `${Viewport.CANVAS_WIDTH}`);
@@ -268,25 +107,6 @@ export function main() {
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
   
-  
-
-  /**
-   * Renders the current state to the canvas.
-   *
-   * In MVC terms, this updates the View using the Model.
-   *
-   * @param s Current state
-   * 
-   */
-
-  const render = (s: State) => {
-    // Render the main display canvas
-    updateDisplayedCanvas(s.canvas, svg);
-    // Render the preview canvas
-    updateDisplayedCanvas(s.previewCanvas, preview);
-  };
-
-
   const source$ = merge(tick$, movement$, rotation$)
     .pipe(
       scan(
