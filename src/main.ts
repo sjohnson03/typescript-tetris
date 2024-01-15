@@ -34,7 +34,6 @@ type Key = "KeyS" | "KeyA" | "KeyD" | "KeyR" | "KeyE";
 
 
 
-
 // Initial state for starting a game
 const initialState: State = {
   canvas: Canvas,
@@ -46,15 +45,6 @@ const initialState: State = {
   gameEnd: false,
   nextTetromino: allTetrominoes[RNG.scale(RNG.hash(Date.now()))],
 };
-
-/**
- * Updates the state by proceeding with one time step.
- *
- * @param s Current state
- * @returns Updated state
- */
-const tick = (s: State) => s;
-
 
 
 /**
@@ -106,6 +96,7 @@ export function main() {
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
   
+  // This is potentially a bit silly. Could be better to have a single stream for each stream
   const source$ = merge(tick$, movement$, rotation$)
     .pipe(
       scan(
@@ -124,6 +115,7 @@ export function main() {
                 return row.map((block) => {
                   if (block) {
                     block.colour = "grey";
+                    // return { ...block, colour: "grey" }; // this is the better way to do it but typescript does not like it for some reason
                   }
                   return block;
                 })
@@ -141,6 +133,7 @@ export function main() {
               if (topRowOccupied) {
                 return {
                   ...updatedState,
+
                   highScore: updatedState.score,
                   gameEnd: true, // Set the gameEnd flag to true
                 };

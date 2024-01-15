@@ -78,7 +78,6 @@ export const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: numbe
   
   
   /**
-   * // @todo Change this so that the blocks are not updated but the canvas is replaced.
    * Makes all the blocks in the canvas inactive
    * @param state State to make all blocks inactive in
    * @returns New canvas with all blocks inactive
@@ -87,7 +86,10 @@ export const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: numbe
     const updatedCanvas = state.canvas.map((row) => {
       return row.map((block) => {
         if (block) {
-          block.isActive = false;
+            return {
+                ...block,
+                isActive: false,
+            }
         }
         return block;
       });
