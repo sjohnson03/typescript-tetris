@@ -1,15 +1,12 @@
-# Assignment 1
+# Tetris in TypeScript
+Originally created as part of an assignment for a functional programming course. This is a simple recreation of the popular game Tetris built TypeScript with RxJS.
+
 
 ## Usage
 
 Setup (requires node.js):
 ```
 > npm install
-```
-
-Start tests:
-```
-> npm test
 ```
 
 Serve up the App (and ctrl-click the URL that appears in the console)
