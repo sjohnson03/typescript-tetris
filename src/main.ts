@@ -1,154 +1,30 @@
 /**
- * Inside this file you will use the classes and functions from rx.js
- * to add visuals to the svg element in index.html, animate them, and make them interactive.
- *
- * Study and complete the tasks in observable exercises first to get ideas.
- *
- * Course Notes showing Asteroids in FRP: https://tgdwyer.github.io/asteroids/
- *
- * You will be marked on your functional programming style
- * as well as the functionality that you implement.
- *
- * Document your code!
+ * Tetris in TypeScript with RxJS
+ * Initial code by T. Dwyer, 2023 from Monash Univeristy
  */
 
 import "./style.css";
 
 import { Observable, fromEvent, interval, merge, } from "rxjs";
 import { map, filter, scan, tap, mergeMap, take } from "rxjs/operators";
+import { State } from "./state.ts";
+import {  makeAllBlocksInactive, checkCollision, checkForTetris, spawnTetromino } from "./util.ts";
+import { moveActiveTetromino, updateActiveBlocks, rotateTetromino } from "./movement.ts";
+import { Constants, Viewport } from "./consts.ts";
+import { allTetrominoes } from "./tetronimo.ts";
+import { Canvas } from "./canvas.ts";
+import { BlockSize } from "./block.ts";
 
 /** Constants */
 
-const Viewport = {
-  CANVAS_WIDTH: 200,
-  CANVAS_HEIGHT: 400,
-  PREVIEW_WIDTH: 160,
-  PREVIEW_HEIGHT: 80,
-} as const;
-
-const Constants = {
-  TICK_RATE_MS: 500,
-  GRID_WIDTH: 10,
-  GRID_HEIGHT: 20,
-} as const;
-
-const BlockSize = {
-  WIDTH: Viewport.CANVAS_WIDTH / Constants.GRID_WIDTH,
-  HEIGHT: Viewport.CANVAS_HEIGHT / Constants.GRID_HEIGHT,
-};
-
-type Canvas = (Block | undefined)[][];
-
-const Canvas: (Block | undefined)[][] = new Array(Constants.GRID_HEIGHT + 2).fill(new Array(Constants.GRID_WIDTH).fill(undefined));
-
-type Colour = "aqua" | "red" | "blue" | "green" | "yellow" | "purple" | "orange" | "grey";
-
-type Block = {
-  colour: Colour;
-  isActive?: boolean; // status indicating if the block is currently controlled by the player
-}
-
-type Tetromino = {
-  blocks: [Block, number, number][]; // array of blocks and their positions
-}
 
 
-/**
-  * Creates a block with the specified colour and status. Just a bit easier to instantiate blocks this way
-  * @param colour Colour of the block
-  * @param status Status of the block expressed as a boolean
-  * @returns Block with the specified colour and status
-*/
-const createBlock = (colour: Colour, status = true): Block => ({
-  colour,
-  isActive: status,
-});
+
 
 // Types of tetrominoes
 
-const squareBlock: Tetromino =
-// [][]
-// [][]
-{
-  blocks: [
-    [createBlock("aqua"), 0, 0],
-    [createBlock("aqua",), 1, 0],
-    [createBlock("aqua",), 0, 1],
-    [createBlock("aqua",), 1, 1]
-  ],
-};
 
 
-const longBlock: Tetromino =
-// [][][][]
-{
-  blocks: [
-    [createBlock("red"), 0, 0],
-    [createBlock("red"), 1, 0],
-    [createBlock("red"), 2, 0],
-    [createBlock("red"), 3, 0]
-  ],
-};
-
-const rightAngleBlock: Tetromino =
-{
-  // [][][]
-  //     []
-  blocks: [
-    [createBlock("blue"), 0, 0],
-    [createBlock("blue"), 1, 0],
-    [createBlock("blue"), 2, 0],
-    [createBlock("blue"), 2, 1]
-  ],
-};
-
-const leftAngleBlock: Tetromino = {
-  //
-  //  [][][]
-  //  []
-  blocks: [
-    [createBlock("green"), 0, 0],
-    [createBlock("green"), 0, 1],
-    [createBlock("green"), 1, 0],
-    [createBlock("green"), 2, 0]
-  ],
-}
-
-const tBlock: Tetromino = {
-  //
-  //  [][][]
-  //    []
-  blocks: [
-    [createBlock("yellow"), 0, 0],
-    [createBlock("yellow"), 1, 0],
-    [createBlock("yellow"), 2, 0],
-    [createBlock("yellow"), 1, 1]
-  ],
-}
-
-const zBlock: Tetromino = {
-  // [][]
-  //   [][]
-  blocks: [
-    [createBlock("purple"), 0, 0],
-    [createBlock("purple"), 1, 0],
-    [createBlock("purple"), 1, 1],
-    [createBlock("purple"), 2, 1]
-  ],
-}
-
-const sBlock: Tetromino = {
-  //   [][]
-  // [][]
-  blocks: [
-    [createBlock("orange"), 0, 1],
-    [createBlock("orange"), 1, 1],
-    [createBlock("orange"), 1, 0],
-    [createBlock("orange"), 2, 0]
-  ],
-}
-
-const allTetrominoes = [squareBlock, longBlock, rightAngleBlock, leftAngleBlock, tBlock, zBlock, sBlock];
 
 abstract class RNG {
   private static m = 0x80000000; // 2**31
@@ -170,363 +46,14 @@ type Event = "keydown" | "keyup" | "keypress";
 
 /** Utility functions */
 
-/**
- * 
- * @param canvas Canvas to check collision in
- * @param tetromino Tetromino to check collision for
- * @param direction Direction to check collision in
- * @returns 
- */
-const checkCollision = (canvas: Canvas) => (blocks: { x: number; y: number; }[], direction: { x: number; y: number }): boolean => {
-  const collision = blocks.reduce((acc, block) => {
-    const x = block.x;
-    const y = block.y;
-    // check if we are trying to move below or above the canvas, if so there is definitely a collision
-    if (direction.y + y >= Constants.GRID_HEIGHT + 2 || direction.y + y <= 0) { return true || acc; }
-    if (canvas[direction.y + y][direction.x + x] || direction.x + x < 0 || direction.x + x >= Constants.GRID_WIDTH) {
-
-      if (canvas[direction.y + y][direction.x + x]?.isActive) {
-        return false || acc;
-      }
-      // if the block we see is active, we return false to allow movement
-      // Otherwise, we return true:
-      return true || acc;
-    }
-    return acc;
-  }, false);
-  return collision;
-};
-
-const checkForTetris = (state: State): State => {
-  const updatedCanvas = state.canvas.reduce((acc, row, rowIndex): Canvas => {
-    const isTetris = row.reduce((acc, block, colIndex) => {
-
-      if (block && !block.isActive) {
-        return true && acc;
-      }
-      return false && acc;
-    }, true);
-
-    if (isTetris) {
-      return [[...new Array(Constants.GRID_WIDTH).fill(undefined)], ...acc]; // Add a new empty row at the top so we can move all the rows down
-    }
-    // otherwise we keep the row as is
-    return [...acc, row];
-  }, [] as Canvas);
-
-
-  // Calculate how many rows were moved down
-  const rowsReplaced = state.canvas.filter((row, rowIndex) => {
-    const isTetris = row.reduce((acc, block, colIndex) => {
-      if (block && !block.isActive) {
-        return true && acc;
-      }
-      return false && acc;
-    }, true);
-    return isTetris;
-  }).length;
-
-  // Update the score and level
-  const score = state.score + rowsReplaced * (100 * state.level / 2);
-  const level = Math.floor(score / 500) + 1; // level up every 500 points
-  return {
-    ...state,
-    // new canvas with the rows removed
-    canvas: [...updatedCanvas, ...new Array(rowsReplaced).fill(new Array(Constants.GRID_WIDTH).fill(undefined))],
-    score,
-    level,
-  };
-};
-
-
-/**
- * Makes all the blocks in the canvas inactive
- * @param state State to make all blocks inactive in
- * @returns New canvas with all blocks inactive
-*/
-const makeAllBlocksInactive = (state: State): State => {
-  const updatedCanvas = state.canvas.map((row) => {
-    return row.map((block) => {
-      if (block) {
-        block.isActive = false;
-      }
-      return block;
-    });
-  });
-  return {
-    ...state,
-    canvas: updatedCanvas,
-    activeBlockPositions: [],
-  };
-};
 
 // ** MOVEMENT FUNCTIONS **
 
-/**
- * Moves all currently active blocks in specified direction ensuring that no blocks collide as expected.
- * @param state The current state
- * @param direction Movement direction (e.g., { x: -1, y: 0 } for left)
- * @returns Updated state
- */
-const moveActiveTetromino = (state: State, direction: { x: number; y: number }): State => {
-  const activeBlockPositions = updateActiveBlocks(state); // the positions of all active blocks
-
-  if (activeBlockPositions.length > 0 && (direction.x < 0)) { // if we are moving left
-    const updatedCanvas = activeBlockPositions.reduce((canvas, position) => { // for each active block we move it in the specified direction
-      const newPosition = {
-        x: position.x + direction.x,
-        y: position.y + direction.y,
-      };
-      if (checkCollision(canvas)(activeBlockPositions, direction)) {
-        return canvas;
-      }
-      return moveBlock(canvas)(position.x, position.y)(newPosition.x, newPosition.y);
-    }, state.canvas);
-
-    return {
-      ...state,
-      canvas: updatedCanvas,
-      activeBlockPositions: updateActiveBlocks({
-        ...state,
-        canvas: updatedCanvas,
-      }),
-    };
-  }
-  else if (activeBlockPositions.length > 0 && (direction.x > 0 || direction.y > 0)) { // if we are moving right or moving down
-    const updatedCanvas = activeBlockPositions.reduceRight((canvas, position) => { // for each active block we move it in the specified direction
-      // we use reduceRight to read the array from right to left so the rightmost block moves before the one to its left
-      // this gets the blocks out of the way of the block which is about to be moved.
-      const newPosition = {
-        x: position.x + direction.x,
-        y: position.y + direction.y,
-      };
-      if (checkCollision(canvas)(activeBlockPositions, direction)) {
-        return canvas;
-      }
-      return moveBlock(canvas)(position.x, position.y)(newPosition.x, newPosition.y);
-    }, state.canvas);
-
-    return {
-      ...state,
-      canvas: updatedCanvas,
-      activeBlockPositions: updateActiveBlocks({
-        ...state,
-        canvas: updatedCanvas,
-        activeBlockPositions: activeBlockPositions,
-      }),
-    };
-  }
-
-  return state;
-};
 
 
-/**
- * Performs rotation on the currently active tetromino in a specified direction (clockwise or anticlockwise)
- * @param state state which contains tetrmonio to rotate
- * @param direction direction to rotate in (1 for clockwise, -1 for anticlockwise)
- * @returns new state with rotated tetromino
- */
-const rotateTetromino = (state: State, direction: number): State => {
-
-  /**
-   * Helper function to apply rotation to a set of blocks around it's centre of rotation.
-   * Function assumes blocks are centred around the origin and we apply a rotation matrix to them.
-   * Idea gathered from: https://stackoverflow.com/questions/233850/tetris-piece-rotation-algorithm
-   * and https://en.wikipedia.org/wiki/Rotation_matrix
-   * @param blocks positions of blocks to rotate
-   * @param rotationDirection direction to rotate in (1 for clockwise, -1 for anticlockwise)
-   * @returns new positions of blocks after rotation
-   */
-  const rotationHelper = (blocks: { x: number, y: number }[], rotationDirection = direction): { x: number, y: number }[] => {
-    if (rotationDirection == 1) { // rotate clockwise
-      return blocks.map((block) => {
-        return {
-          // If a block of a piece starts at (1,2) it moves clockwise to (2,-1) and (-1,-2) and (-1, 2). 
-          // Apply this for each block and the piece is rotated.
-          x: block.x * 0 + block.y * 1,
-          y: block.x * -1 + block.y * 0,
-        }
-      })
-    }
-    else if (rotationDirection == -1) { // rotate anticlockwise
-      return blocks.map((block) => {
-        return {
-          x: block.x * 0 + block.y * -1,
-          y: block.x * 1 + block.y * 0,
-        }
-      })
-    }
-    else {
-      console.error("Error applying rotation");
-      return blocks;
-    }
-  }
-
-  const activeBlockPositions = updateActiveBlocks(state); // update all the positions of active blocks
-
-  if (activeBlockPositions.length == 0) {
-    return state; // no active blocks to move, no point in executing this function
-  }
-
-  // Remove the active blocks from the canvas
-  // This is so we don't have to worry about pieces colliding with themselves when rotating
-  const removedActiveBlock = activeBlockPositions.reduce((canvas, position) => {
-    return removeBlockFromCanvas(canvas)(position.x, position.y);
-  }, state.canvas);
-
-  // first we need to find the centre of rotation
-  const centreOfRotation = activeBlockPositions.reduce((acc, block) => {
-    return {
-      x: (acc.x + block.x),
-      y: (acc.y + block.y),
-    };
-  }, { x: 0, y: 0 });
-  centreOfRotation.x = centreOfRotation.x / activeBlockPositions.length;
-  centreOfRotation.y = centreOfRotation.y / activeBlockPositions.length
 
 
-  // Rotation assumes the origin is located at point (0,0) so we need to translate the blocks to the origin
-  // Inspired by stackoverflow post: https://stackoverflow.com/questions/233850/tetris-piece-rotation-algorithm
-  const translatedBlocks = activeBlockPositions.map((block) => {
-    return {
-      x: (block.x - centreOfRotation.x),
-      y: (block.y - centreOfRotation.y),
-    };
-  });
-  const rotatedBlocks = rotationHelper(translatedBlocks);
 
-  // we now need to translate the blocks back to their original position
-  const updatedBlocks = rotatedBlocks.map((block) => {
-    return {
-      x: Math.round(block.x + centreOfRotation.x),
-      y: Math.round(block.y + centreOfRotation.y),
-    };
-  });
-
-  // we now need to check if the rotated blocks will collide with anything
-  if (checkCollision(state.canvas)(updatedBlocks, { x: 0, y: 0 })) {
-    return state; // if they will collide, we return the state unchanged
-  }
-
-  // We store the colour of one of the active blocks so we can use it to create new roated blocks
-  const colour = state.canvas[activeBlockPositions[0].y][activeBlockPositions[0].x]?.colour;
-
-  // Create a new tetromino with the the blocks rotated
-  const updatedTetronimo: Tetromino = {
-    blocks: updatedBlocks.map((block) => {
-      return [createBlock(colour ? colour : "blue"), block.x, block.y];
-    }),
-
-  }
-  return { // Return a new state with the rotated tetromino
-    ...state,
-    canvas: spawnTetromino(removedActiveBlock)(updatedTetronimo)(0, 0),
-    activeBlockPositions: updatedBlocks,
-  }
-};
-
-/**
- * Updates the activeBlocks array stored in the state for the currently active blocks in our game
- * @param state Current state
- * @returns New activeBlocks array
-*/
-const updateActiveBlocks = (state: State): { x: number; y: number }[] => {
-  const activeBlocks = state.canvas.reduce((acc, row, rowIndex) => {
-    return row.reduce((acc, block, colIndex) => {
-      if (block && block.isActive) {
-        acc.push({ x: colIndex, y: rowIndex });
-      }
-      return acc;
-    }, acc);
-  }, [] as { x: number; y: number }[]);
-  return activeBlocks;
-};
-
-
-/**
- * Add block at specified location to our canvas matrix
- * @param canvas Canvas to add block to
- * @param block Block to add
- * @param x x-coordinate of block to add
- * @param y y-coordinate of block to add
- * @returns New canvas with added block
-*/
-const addBlockToCanvas = (canvas: Canvas) => (block: Block | undefined) => (x: number, y: number): Canvas => {
-  const updatedCanvas = canvas.map((row, rowIndex) =>
-    row.map((currentBlock, colIndex) =>
-      rowIndex === y && colIndex === x
-        ? block // Add the new block at the specified position
-        : currentBlock // otherwise keep the already existing block
-    )
-  );
-  return updatedCanvas;
-};
-
-
-/**
- * Removes a block from a specified position on the canvas
- * @param canvas Canvas to remove block from
- * @param x x-coordinate of block to remove
- * @param y y-coordinate of block to remove
- * @returns New canvas with block removed
-*/
-const removeBlockFromCanvas = (canvas: Canvas) => (x: number, y: number): Canvas => {
-  const updatedCanvas = canvas.map((row, rowIndex) =>
-    row.map((currentBlock, colIndex) =>
-      rowIndex === y && colIndex === x // check if we are at the specified location
-        ? undefined // remove the block at the specified position
-        : currentBlock // otherwise keep the block
-    )
-  );
-  return updatedCanvas;
-};
-
-/**
- * Function used to spawn a new tetromino on the canvas
- * @param canvas Canvas to add tetromino to
- * @returns new canvas with tetromino added
- */
-const spawnTetromino = (canvas: Canvas) => (tetromino: Tetromino) => (x: number, y: number, colour?: Colour): Canvas => {
-  const updatedCanvas = tetromino.blocks.reduce((acc, block) => {
-    const blockToAdd = createBlock(colour ? colour : block[0].colour, true);
-    const blockX = block[1];
-    const blockY = block[2];
-    return addBlockToCanvas(acc)(blockToAdd)(blockX + x, blockY + y);
-  }, canvas);
-  return updatedCanvas;
-};
-
-
-/**
- * Moves a block at a specified position on the canvas to a new position
- * considering potential interactions with other blocks.
- * @param canvas Canvas to update
- * @param x x-coordinate of block to move
- * @param y y-coordinate of block to move
- * @param newX x-coordinate of new position
- * @param newY y-coordinate of new position
- * @param force If true, the block will be moved no matter what
- * @returns New Canvas with specified block moved to its new position
- */
-const moveBlock = (canvas: Canvas,) => (x: number, y: number,) => (newX: number, newY: number, force = false): Canvas => {
-  const block = canvas[y][x];
-
-  if (newX < 0 || newX >= Constants.GRID_WIDTH || newY < 0 || newY >= Constants.GRID_HEIGHT + 2) {
-    return canvas; // If the new position is outside the canvas, return unchanged canvas
-  }
-
-  if (force) { // Add the block to the new position, regardless of whether there is a block there or not
-    return addBlockToCanvas(canvas[newY][newX] ? canvas : removeBlockFromCanvas(canvas)(x, y))(block)(newX, newY);
-  }
-
-  if ((newX >= 0 && newX < Constants.GRID_WIDTH && !canvas[newY][newX])) {
-    // Add the block to the new position if there is no block there already
-    return addBlockToCanvas(canvas[newY][newX] ? canvas : removeBlockFromCanvas(canvas)(x, y))(block)(newX, newY);
-  }
-
-  return canvas;
-};
 
 /**
  * Applies gravity to the currently active (controlled by the player) blocks on the canvas.
@@ -567,16 +94,6 @@ function applyGravity(state: State, row: number = Constants.GRID_HEIGHT + 1, col
 
 /** State processing */
 
-type State = Readonly<{
-  canvas: (Block | undefined)[][];
-  previewCanvas: (Block | undefined)[][];
-  activeBlockPositions: { x: number; y: number }[];
-  gameEnd: boolean;
-  score: number;
-  level: number;
-  highScore?: number;
-  nextTetromino: Tetromino;
-}>;
 
 // Initial state for starting a game
 const initialState: State = {
@@ -750,16 +267,8 @@ export function main() {
 
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
-
-
-  const gravityTest = {
-    // canvas: addBlockToCanvas(addBlockToCanvas(addBlockToCanvas(Canvas)(createBlock("aqua", true))(4, 0))(createBlock("red", true))(5, 0))(createBlock("green", true))(6, 0),
-    canvas: Canvas,
-    previewCanvas: Canvas,
-    nextTetromino: squareBlock,
-    activeBlockPositions: [],
-    gameEnd: false
-  };
+  
+  
 
   /**
    * Renders the current state to the canvas.
