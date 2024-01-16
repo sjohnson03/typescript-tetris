@@ -7,7 +7,7 @@ export const Viewport = {
   } as const;
   
 export const Constants = {
-    TICK_RATE_MS: 500,
+    TICK_RATE_MS: 50, // tick rate greatly reduced because of scaling difficulty with levels
     GRID_WIDTH: 10,
     GRID_HEIGHT: 20,
   } as const;

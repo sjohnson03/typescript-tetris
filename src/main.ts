@@ -51,7 +51,7 @@ const initialState: State = {
  * This is the function called on page load. Your main game loop
  * should be called here.
  */
-export function main() {
+function main() {
 
 
   svg.setAttribute("height", `${Viewport.CANVAS_HEIGHT}`);
@@ -92,6 +92,7 @@ export function main() {
   const rotation$ = merge(rotateClockwise$, rotateAntiClockwise$).pipe(
     map((rotation) => ({ type: "rotation", direction: rotation }))
   );
+;
 
   /** Determines the rate of time steps */
   const tick$ = interval(Constants.TICK_RATE_MS);
@@ -101,7 +102,6 @@ export function main() {
     .pipe(
       scan(
         (state: State, event: any) => {
-
           if (state.gameEnd) {
             if (event.type === "rotation") {
               return {
@@ -120,7 +120,6 @@ export function main() {
                   return block;
                 })
               })
-
             }
           }
 
@@ -133,7 +132,6 @@ export function main() {
               if (topRowOccupied) {
                 return {
                   ...updatedState,
-
                   highScore: updatedState.score,
                   gameEnd: true, // Set the gameEnd flag to true
                 };
@@ -148,6 +146,7 @@ export function main() {
               };
             }
             // Just apply gravity
+            if (event % 10 - state.level === 0 || state.level >= 10) { // janky way to scale the tick rate with the level
             return {
               ...state,
               canvas: applyGravity(state).canvas,
@@ -155,6 +154,7 @@ export function main() {
               activeBlockPositions: updateActiveBlocks(state),
               nextTetromino: state.nextTetromino,
             };
+          }
           } else if (event.type === "movement") {
             // return moveMultipleBlocks(state.canvas)(state.activeBlockPositions, event.direction);
             return moveActiveTetromino(state, event.direction);
